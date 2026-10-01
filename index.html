@@ -315,7 +315,21 @@
           <div class="search"><span>&#128269;</span><input placeholder="Search across every column&hellip;" id="searchBox" oninput="applyFilters()" /></div>
           <select id="sectorFilter" onchange="applyFilters()"><option value="">Sector &mdash; any</option></select>
           <select id="statusFilter" onchange="applyFilters()"><option value="">Status &mdash; any</option><option value="repeat">Repeat only</option><option value="single">Single fund only</option></select>
-          <button class="btn col-btn" id="colBtn">Columns <span class="badge-count" id="colCount" style="display:none;">0</span></button>
+                    <button class="btn col-btn" id="colBtn">Columns <span class="badge-count" id="colCount" style="display:none;">0</span></button>
+          <div class="group-select" style="position:relative;">
+            <div class="btn" id="groupBtn" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="document.getElementById('groupDropdown').classList.toggle('open')">
+              <span id="groupBtnLabel">Investing group &mdash; any</span><span>&#9662;</span>
+            </div>
+            <div id="groupDropdown" style="display:none;position:absolute;top:38px;left:0;width:260px;max-height:260px;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 24px rgba(20,30,50,0.12);z-index:20;"></div>
+          </div>
+        </div>
+        <div id="groupSummaryPanel" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px 20px;margin-bottom:14px;">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+            <span id="gsName" style="font-size:16px;font-weight:600;"></span>
+            <span><span id="gsTotal" class="num" style="font-size:20px;font-weight:500;color:var(--accent-dark);"></span> <span onclick="clearGroupFilter()" style="cursor:pointer;color:var(--ink-faint);font-size:13px;margin-left:8px;" title="Clear">&times;</span></span>
+          </div>
+          <div id="gsSub" style="font-size:12px;color:var(--ink-faint);margin-bottom:12px;"></div>
+          <div id="gsFundSplit" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
         </div>
         <div class="col-panel" id="colPanel">
           <p class="lbl">Add a column</p>
@@ -664,11 +678,15 @@ async function processNewRow(rowObj, sector, fundId){
 }
 
 async function mergeIntoExisting(existing, rowObj, sector, fundId){
-  const newAmount = (Number(existing.row["Amount INR"])||0) + (Number(rowObj["Amount INR"])||0);
+  const addAmt = Number(rowObj["Amount INR"])||0;
+  const newAmount = (Number(existing.row["Amount INR"])||0) + addAmt;
   const updates = { "row.Amount INR": newAmount, funds: arrayUnion(fundId), repeat: true };
+  if(!existing.fundAmounts && (existing.funds||[]).length){
+    updates["fundAmounts"] = { [existing.funds[0]]: Number(existing.row["Amount INR"])||0, [fundId]: addAmt };
+  } else {
+    updates[`fundAmounts.${fundId}`] = (existing.fundAmounts?.[fundId]||0) + addAmt;
+  }
   MASTER_COLS.forEach(c => { if(!existing.row[c] && rowObj[c]) updates[`row.${c}`] = rowObj[c]; });
-  if(existing.sector === "Uncertain" && sector !== "Uncertain") updates["sector"] = sector;
-  await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
 }
 
 /* ============ Bell: possible-match review ============ */
@@ -703,11 +721,16 @@ window.confirmMatch = async function(matchId){
   const existing = INVESTORS.find(i => i.id === m.existingInvestorId);
   const newer = INVESTORS.find(i => i.id === m.newInvestorId);
   if(existing && newer){
-    const newAmount = (Number(existing.row["Amount INR"])||0) + (Number(newer.row["Amount INR"])||0);
+      const addAmt = Number(newer.row["Amount INR"])||0;
+    const newAmount = (Number(existing.row["Amount INR"])||0) + addAmt;
     const updates = { "row.Amount INR": newAmount, funds: arrayUnion(...(newer.funds||[])), repeat: true };
+    const nf = (newer.funds||[])[0];
+    if(!existing.fundAmounts && (existing.funds||[]).length){
+      updates["fundAmounts"] = { [existing.funds[0]]: Number(existing.row["Amount INR"])||0, [nf]: addAmt };
+    } else if(nf){
+      updates[`fundAmounts.${nf}`] = (existing.fundAmounts?.[nf]||0) + addAmt;
+    }
     MASTER_COLS.forEach(c => { if(!existing.row[c] && newer.row[c]) updates[`row.${c}`] = newer.row[c]; });
-    await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
-    await deleteDoc(doc(db, INVESTORS_COL, newer.id));
   }
   await deleteDoc(doc(db, MATCHES_COL, matchId));
 };
@@ -772,8 +795,52 @@ function currentRows(){
   if(currentFund === "__all__") return INVESTORS;
   return INVESTORS.filter(r => (r.funds||[]).includes(currentFund));
 }
+let groupFilter = null;
 function applyFilters(){ renderAll(); }
-
+function renderGroupDropdown(){
+  const groups = {};
+  currentRows().forEach(r => { const g = (r.row["Investing Group"]||"").trim(); if(g) groups[g] = (groups[g]||0) + 1; });
+  const keys = Object.keys(groups).sort();
+  const dd = document.getElementById("groupDropdown");
+  dd.innerHTML = `<div style="padding:9px 13px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--line-soft);" onclick="selectGroup(null)">Investing group &mdash; any</div>` +
+    keys.map(k => `<div style="padding:9px 13px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--line-soft);" onclick="selectGroup('${k.replace(/'/g,"\\'")}')">${escapeHtml(k)} <span style="color:var(--ink-faintest);font-size:11px;">&middot; ${groups[k]}</span></div>`).join("");
+}
+window.selectGroup = function(key){
+  groupFilter = key;
+  document.getElementById("groupBtnLabel").textContent = key || "Investing group \u2014 any";
+  document.getElementById("groupDropdown").classList.remove("open");
+  document.getElementById("groupDropdown").style.display = "none";
+  renderAll();
+};
+window.clearGroupFilter = function(){ selectGroup(null); };
+document.getElementById("groupBtn").onclick = () => {
+  const dd = document.getElementById("groupDropdown");
+  const open = dd.style.display === "block";
+  dd.style.display = open ? "none" : "block";
+};
+function renderGroupSummary(){
+  const panel = document.getElementById("groupSummaryPanel");
+  if(!groupFilter){ panel.style.display = "none"; return; }
+  const rows = currentRows().filter(r => (r.row["Investing Group"]||"").trim() === groupFilter);
+  const total = rows.reduce((s,r) => s + (Number(r.row["Amount INR"])||0), 0);
+  const byFund = {};
+  rows.forEach(r => {
+    if(r.fundAmounts){ Object.entries(r.fundAmounts).forEach(([f,a]) => byFund[f] = (byFund[f]||0) + Number(a||0)); }
+    else { (r.funds||[]).forEach(f => byFund[f] = (byFund[f]||0) + (Number(r.row["Amount INR"])||0)); }
+  });
+  panel.style.display = "block";
+  document.getElementById("gsName").textContent = groupFilter;
+  document.getElementById("gsTotal").textContent = "\u20b9" + (total/1e7).toLocaleString(undefined,{maximumFractionDigits:2}) + " Cr";
+  const fundKeys = Object.keys(byFund);
+  document.getElementById("gsSub").textContent = `${rows.length} entit${rows.length===1?"y":"ies"}${fundKeys.length>1 ? " \u00b7 invested across " + fundKeys.length + " funds" : ""}`;
+  const maxF = Math.max(1, ...Object.values(byFund));
+  document.getElementById("gsFundSplit").innerHTML = fundKeys.length > 1 ? fundKeys.map(f => `
+    <div style="flex:1;min-width:150px;background:var(--page);border:1px solid var(--line-soft);border-radius:9px;padding:10px 14px;">
+      <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:4px;">${escapeHtml(f)}</div>
+      <div class="num" style="font-size:15px;font-weight:500;">\u20b9${(byFund[f]/1e7).toLocaleString(undefined,{maximumFractionDigits:2})} Cr</div>
+      <div style="height:4px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden;"><div style="height:100%;background:var(--accent);width:${(byFund[f]/maxF*100).toFixed(0)}%"></div></div>
+    </div>`).join("") : "";
+}
 function renderHeader(){
   const tr = document.getElementById("headerRow");
   const cols = currentAllCols();
@@ -793,7 +860,10 @@ function renderAll(){
   const sectorF = document.getElementById("sectorFilter").value;
   const statusF = document.getElementById("statusFilter").value;
 
+  renderGroupDropdown();
+  renderGroupSummary();
   let rows = currentRows().filter(r => {
+    if(groupFilter && (r.row["Investing Group"]||"").trim() !== groupFilter) return false;
     const amtL = (Number(r.row["Amount INR"])||0) / 100000;
     if(amtL < minL || amtL > maxL) return false;
     if(sectorF && r.sector !== sectorF) return false;
