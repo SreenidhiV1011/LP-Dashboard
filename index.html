@@ -601,11 +601,18 @@ function guessColumns(headerRow){
 async function handleUpload(e){
   const file = e.target.files[0];
   if(!file) return;
-  setStatusDot(true);
-  document.getElementById("footStatus").textContent = "Uploading\u2026";
   const reader = new FileReader();
   reader.onload = async (evt) => {
     const wb = XLSX.read(evt.target.result, { type: "binary" });
+    const defaultName = wb.SheetNames[0] || file.name.replace(/\.[^.]+$/, "");
+    const fundName = window.prompt("Name this fund (this is how it'll show up in the sidebar and in repeat-LP tagging):", defaultName);
+    if(fundName === null || !fundName.trim()){
+      e.target.value = "";
+      return; // cancelled
+    }
+    const fundId = fundName.trim();
+    setStatusDot(true);
+    document.getElementById("footStatus").textContent = "Uploading\u2026";
     let total = 0, flagged = 0;
     for(const sheetName of wb.SheetNames){
       const ws = wb.Sheets[sheetName];
@@ -620,14 +627,14 @@ async function handleUpload(e){
         const rowObj = {}; MASTER_COLS.forEach(c => rowObj[c] = "");
         Object.keys(map).forEach(col => { rowObj[col] = dataRow[map[col]] ?? ""; });
         const sector = tagSector(rowObj);
-        const result = await processNewRow(rowObj, sector, sheetName);
+        const result = await processNewRow(rowObj, sector, fundId);
         total++;
         if(result === "flagged") flagged++;
       }
     }
     setStatusDot(false);
     alert(total > 0
-      ? `Upload complete \u2014 ${total} row(s) processed.` + (flagged > 0 ? ` ${flagged} possible match(es) need your review \u2014 check the bell icon.` : "")
+      ? `Upload complete \u2014 ${total} row(s) processed into "${fundId}".` + (flagged > 0 ? ` ${flagged} possible match(es) need your review \u2014 check the bell icon.` : "")
       : "Nothing recognizable found \u2014 check that the sheet has a column that looks like an investor name.");
   };
   reader.readAsBinaryString(file);
@@ -687,6 +694,7 @@ async function mergeIntoExisting(existing, rowObj, sector, fundId){
     updates[`fundAmounts.${fundId}`] = (existing.fundAmounts?.[fundId]||0) + addAmt;
   }
   MASTER_COLS.forEach(c => { if(!existing.row[c] && rowObj[c]) updates[`row.${c}`] = rowObj[c]; });
+  await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
 }
 
 /* ============ Bell: possible-match review ============ */
@@ -731,6 +739,8 @@ window.confirmMatch = async function(matchId){
       updates[`fundAmounts.${nf}`] = (existing.fundAmounts?.[nf]||0) + addAmt;
     }
     MASTER_COLS.forEach(c => { if(!existing.row[c] && newer.row[c]) updates[`row.${c}`] = newer.row[c]; });
+    await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
+    await deleteDoc(doc(db, INVESTORS_COL, newer.id));
   }
   await deleteDoc(doc(db, MATCHES_COL, matchId));
 };
