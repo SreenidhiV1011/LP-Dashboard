@@ -20,7 +20,7 @@
   *{box-sizing:border-box;}
   body{ margin:0; background:var(--paper); color:var(--ink); font-family:'Figtree',system-ui,sans-serif; font-size:13px; line-height:1.5; }
   .num{ font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
-  .shell{ max-width:1280px; margin:0 auto; background:var(--page); min-height:100vh; }
+  .shell{ background:var(--page); min-height:100vh; }
   .app{ display:grid; grid-template-columns:190px minmax(0,1fr); }
 
   #signinGate{
@@ -188,33 +188,11 @@
   .bar-track{ height:5px; background:var(--line); border-radius:3px; margin-top:6px; overflow:hidden; }
   .bar-fill{ height:100%; background:var(--accent); }
 
-  #chatFab{ position:fixed; right:24px; bottom:24px; width:52px; height:52px; border-radius:50%; background:var(--accent); color:#fff; border:none; cursor:pointer; box-shadow:0 4px 14px rgba(20,30,50,0.25); font-size:22px; display:flex; align-items:center; justify-content:center; z-index:40; }
-  #chatFab:hover{ background:var(--accent-dark); }
-  #chatPanel{ position:fixed; right:24px; bottom:88px; width:360px; max-width:calc(100vw - 48px); height:480px; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 10px 32px rgba(20,30,50,0.2); display:none; flex-direction:column; overflow:hidden; z-index:41; }
-  #chatPanel.open{ display:flex; }
-  .chat-head{ padding:12px 14px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
-  .chat-head b{ font-size:13px; }
-  .chat-head .gear{ cursor:pointer; color:var(--ink-faintest); font-size:15px; }
-  .chat-head .gear:hover{ color:var(--accent); }
-  .chat-body{ flex:1; overflow-y:auto; padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
-  .chat-msg{ max-width:88%; padding:8px 11px; border-radius:9px; font-size:12.5px; line-height:1.45; white-space:pre-wrap; }
-  .chat-msg.user{ align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:2px; }
-  .chat-msg.bot{ align-self:flex-start; background:var(--page); color:var(--ink); border-bottom-left-radius:2px; }
-  .chat-msg.sys{ align-self:center; color:var(--ink-faintest); font-size:11px; }
-  .chat-input-row{ border-top:1px solid var(--line); padding:9px; display:flex; gap:6px; }
-  .chat-input-row input{ flex:1; font-family:inherit; font-size:12.5px; padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius); }
-  .chat-input-row button{ font-family:inherit; font-size:12.5px; font-weight:600; padding:8px 12px; border-radius:var(--radius); border:none; background:var(--accent); color:#fff; cursor:pointer; }
-  .chat-input-row button:disabled{ opacity:0.5; cursor:default; }
-  .chat-key-setup{ padding:16px 14px; font-size:12px; color:var(--ink-soft); display:flex; flex-direction:column; gap:8px; }
-  .chat-key-setup input{ font-family:inherit; font-size:12.5px; padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius); }
-  .chat-key-setup button{ font-family:inherit; font-size:12.5px; font-weight:600; padding:8px 10px; border-radius:var(--radius); border:none; background:var(--accent); color:#fff; cursor:pointer; }
-
   @media (max-width: 900px){
     .app{ grid-template-columns:1fr; }
     .sidebar{ display:none; }
     .stat-strip{ flex-wrap:wrap; }
     .stat{ flex:1 1 50%; border-bottom:1px solid var(--line); }
-    #chatPanel{ right:12px; left:12px; width:auto; bottom:80px; }
     .bell-panel{ right:-60px; width:300px; }
   }
 </style>
@@ -369,26 +347,6 @@
 </div>
 </div>
 
-<button id="chatFab" onclick="toggleChat()" title="Ask the data">&#128172;</button>
-<div id="chatPanel">
-  <div class="chat-head">
-    <b>Ask the ledger</b>
-    <span class="gear" onclick="openKeySetup()" title="API key settings">&#9881;</span>
-  </div>
-  <div id="chatKeySetup" class="chat-key-setup" style="display:none;">
-    <span>This chatbot calls the Anthropic API directly from your browser using your own API key (stored only in this browser's local storage &mdash; never sent anywhere but api.anthropic.com).</span>
-    <input type="password" id="apiKeyInput" placeholder="sk-ant-..." />
-    <button onclick="saveApiKey()">Save key</button>
-  </div>
-  <div class="chat-body" id="chatBody">
-    <div class="chat-msg sys">Ask things like "top 5 investors in Delhi" or "total from HNI category".</div>
-  </div>
-  <div class="chat-input-row">
-    <input type="text" id="chatInput" placeholder="Ask about your investors&hellip;" onkeydown="if(event.key==='Enter') sendChatMessage();" />
-    <button id="chatSendBtn" onclick="sendChatMessage()">Send</button>
-  </div>
-</div>
-
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import {
@@ -448,7 +406,7 @@ let viewMode = "table";
 let unit = "L";
 let sortKey = "Amount INR", sortDir = "desc";
 const L_PER_CR = 100;
-let mapInstance = null, mapMarkersLayer = null, openGroupKey = null, chatHistory = [];
+let mapInstance = null, mapMarkersLayer = null, openGroupKey = null;
 
 const SECTOR_RULES = [
   [/family office/i, "Family office"], [/private equity|venture capital|investment principal|investment strategist|chief investment/i, "PE / VC"],
@@ -601,18 +559,11 @@ function guessColumns(headerRow){
 async function handleUpload(e){
   const file = e.target.files[0];
   if(!file) return;
+  setStatusDot(true);
+  document.getElementById("footStatus").textContent = "Uploading\u2026";
   const reader = new FileReader();
   reader.onload = async (evt) => {
     const wb = XLSX.read(evt.target.result, { type: "binary" });
-    const defaultName = wb.SheetNames[0] || file.name.replace(/\.[^.]+$/, "");
-    const fundName = window.prompt("Name this fund (this is how it'll show up in the sidebar and in repeat-LP tagging):", defaultName);
-    if(fundName === null || !fundName.trim()){
-      e.target.value = "";
-      return; // cancelled
-    }
-    const fundId = fundName.trim();
-    setStatusDot(true);
-    document.getElementById("footStatus").textContent = "Uploading\u2026";
     let total = 0, flagged = 0;
     for(const sheetName of wb.SheetNames){
       const ws = wb.Sheets[sheetName];
@@ -627,14 +578,14 @@ async function handleUpload(e){
         const rowObj = {}; MASTER_COLS.forEach(c => rowObj[c] = "");
         Object.keys(map).forEach(col => { rowObj[col] = dataRow[map[col]] ?? ""; });
         const sector = tagSector(rowObj);
-        const result = await processNewRow(rowObj, sector, fundId);
+        const result = await processNewRow(rowObj, sector, sheetName);
         total++;
         if(result === "flagged") flagged++;
       }
     }
     setStatusDot(false);
     alert(total > 0
-      ? `Upload complete \u2014 ${total} row(s) processed into "${fundId}".` + (flagged > 0 ? ` ${flagged} possible match(es) need your review \u2014 check the bell icon.` : "")
+      ? `Upload complete \u2014 ${total} row(s) processed.` + (flagged > 0 ? ` ${flagged} possible match(es) need your review \u2014 check the bell icon.` : "")
       : "Nothing recognizable found \u2014 check that the sheet has a column that looks like an investor name.");
   };
   reader.readAsBinaryString(file);
@@ -694,7 +645,6 @@ async function mergeIntoExisting(existing, rowObj, sector, fundId){
     updates[`fundAmounts.${fundId}`] = (existing.fundAmounts?.[fundId]||0) + addAmt;
   }
   MASTER_COLS.forEach(c => { if(!existing.row[c] && rowObj[c]) updates[`row.${c}`] = rowObj[c]; });
-  await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
 }
 
 /* ============ Bell: possible-match review ============ */
@@ -739,8 +689,6 @@ window.confirmMatch = async function(matchId){
       updates[`fundAmounts.${nf}`] = (existing.fundAmounts?.[nf]||0) + addAmt;
     }
     MASTER_COLS.forEach(c => { if(!existing.row[c] && newer.row[c]) updates[`row.${c}`] = newer.row[c]; });
-    await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
-    await deleteDoc(doc(db, INVESTORS_COL, newer.id));
   }
   await deleteDoc(doc(db, MATCHES_COL, matchId));
 };
@@ -1155,70 +1103,6 @@ function renderGroups(){
   }).join("");
 }
 window.toggleGroup = function(key){ openGroupKey = openGroupKey === key ? null : key; renderGroups(); };
-
-function getApiKey(){ return localStorage.getItem("lp_ledger_anthropic_key") || ""; }
-window.saveApiKey = function(){
-  const v = document.getElementById("apiKeyInput").value.trim();
-  if(!v) return;
-  localStorage.setItem("lp_ledger_anthropic_key", v);
-  document.getElementById("chatKeySetup").style.display = "none";
-  addChatMsg("sys", "Key saved to this browser. You're set \u2014 ask away.");
-};
-window.openKeySetup = function(){
-  const el = document.getElementById("chatKeySetup");
-  el.style.display = el.style.display === "none" ? "flex" : "none";
-};
-window.toggleChat = function(){
-  const panel = document.getElementById("chatPanel");
-  panel.classList.toggle("open");
-  if(panel.classList.contains("open") && !getApiKey()) document.getElementById("chatKeySetup").style.display = "flex";
-};
-function addChatMsg(role, text){
-  const body = document.getElementById("chatBody");
-  const div = document.createElement("div");
-  div.className = "chat-msg " + role;
-  div.textContent = text;
-  body.appendChild(div);
-  body.scrollTop = body.scrollHeight;
-}
-function buildDataContext(){
-  const rows = INVESTORS.map(r => ({ investor: r.row["Investor"], group: r.row["Investing Group"], domicile: r.row["Domicile"], city: r.row["City"], amount_inr: Number(r.row["Amount INR"])||0, category: r.row["Category"], repeat: !!r.repeat, funds: r.funds||[] }));
-  return JSON.stringify(rows);
-}
-window.sendChatMessage = async function(){
-  const input = document.getElementById("chatInput");
-  const question = input.value.trim();
-  if(!question) return;
-  const apiKey = getApiKey();
-  if(!apiKey){ document.getElementById("chatKeySetup").style.display = "flex"; return; }
-  input.value = "";
-  addChatMsg("user", question);
-  const sendBtn = document.getElementById("chatSendBtn");
-  sendBtn.disabled = true;
-  addChatMsg("sys", "Thinking\u2026");
-  const body = document.getElementById("chatBody");
-  try{
-    const context = buildDataContext();
-    chatHistory.push({ role: "user", content: question });
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 700,
-        system: "You are a data assistant for Blume Ventures' LP ledger. Answer ONLY using the investor JSON array provided below \u2014 amounts are in INR. Be concise, use \u20b9 Cr for large amounts, and show numbers/names precisely. If the data can't answer the question, say so plainly instead of guessing.\n\nINVESTOR DATA:\n" + context,
-        messages: chatHistory.slice(-6) }),
-    });
-    body.lastChild.remove();
-    if(!resp.ok){ const errText = await resp.text(); addChatMsg("sys", "API error " + resp.status + " \u2014 " + errText.slice(0,200)); chatHistory.pop(); return; }
-    const data = await resp.json();
-    const text = (data.content||[]).filter(b => b.type === "text").map(b => b.text).join("\n") || "(no response)";
-    addChatMsg("bot", text);
-    chatHistory.push({ role: "assistant", content: text });
-  } catch(err){
-    if(body.lastChild && body.lastChild.textContent === "Thinking\u2026") body.lastChild.remove();
-    addChatMsg("sys", "Request failed: " + err.message);
-    chatHistory.pop();
-  } finally { sendBtn.disabled = false; }
-};
 
 maxRange.disabled = true; maxInput.disabled = true;
 updateSliderFill();
