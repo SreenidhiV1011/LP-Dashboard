@@ -689,6 +689,7 @@ async function mergeIntoExisting(existing, rowObj, sector, fundId){
     updates[`fundAmounts.${fundId}`] = (existing.fundAmounts?.[fundId]||0) + addAmt;
   }
   MASTER_COLS.forEach(c => { if(!existing.row[c] && rowObj[c]) updates[`row.${c}`] = rowObj[c]; });
+  await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
 }
 
 /* ============ Bell: possible-match review ============ */
@@ -733,6 +734,8 @@ window.confirmMatch = async function(matchId){
       updates[`fundAmounts.${nf}`] = (existing.fundAmounts?.[nf]||0) + addAmt;
     }
     MASTER_COLS.forEach(c => { if(!existing.row[c] && newer.row[c]) updates[`row.${c}`] = newer.row[c]; });
+    await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
+    await deleteDoc(doc(db, INVESTORS_COL, newer.id));
   }
   await deleteDoc(doc(db, MATCHES_COL, matchId));
 };
