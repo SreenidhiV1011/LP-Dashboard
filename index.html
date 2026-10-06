@@ -800,6 +800,23 @@ function currentRows(){
   if(currentFund === "__all__") return INVESTORS;
   return INVESTORS.filter(r => (r.funds||[]).includes(currentFund));
 }
+/* row["Amount INR"] is cumulative across every fund an investor has joined.
+   In a single-fund view that over-counts repeats, so read the per-fund split instead. */
+function hasFundSplit(r){
+  return !!(r.fundAmounts && Object.prototype.hasOwnProperty.call(r.fundAmounts, currentFund));
+}
+function amountUntracked(r){
+  return currentFund !== "__all__" && (r.funds||[]).length > 1 && !hasFundSplit(r);
+}
+function amountFor(r){
+  if(currentFund !== "__all__" && hasFundSplit(r)) return Number(r.fundAmounts[currentFund])||0;
+  return Number(r.row["Amount INR"])||0;
+}
+/* In a fund view a repeat LP's cell shows either its per-fund slice or (untracked) its
+   all-fund total — editing either would write the wrong number into the cumulative field. */
+function amountLocked(r){
+  return currentFund !== "__all__" && (r.funds||[]).length > 1;
+}
 let groupFilter = null;
 function applyFilters(){ renderAll(); }
 function renderGroupDropdown(){
@@ -827,7 +844,7 @@ function renderGroupSummary(){
   const panel = document.getElementById("groupSummaryPanel");
   if(!groupFilter){ panel.style.display = "none"; return; }
   const rows = currentRows().filter(r => (r.row["Investing Group"]||"").trim() === groupFilter);
-  const total = rows.reduce((s,r) => s + (Number(r.row["Amount INR"])||0), 0);
+  const total = rows.reduce((s,r) => s + amountFor(r), 0);
   const byFund = {};
   rows.forEach(r => {
     if(r.fundAmounts){ Object.entries(r.fundAmounts).forEach(([f,a]) => byFund[f] = (byFund[f]||0) + Number(a||0)); }
@@ -869,7 +886,7 @@ function renderAll(){
   renderGroupSummary();
   let rows = currentRows().filter(r => {
     if(groupFilter && (r.row["Investing Group"]||"").trim() !== groupFilter) return false;
-    const amtL = (Number(r.row["Amount INR"])||0) / 100000;
+    const amtL = amountFor(r) / 100000;
     if(amtL < minL || amtL > maxL) return false;
     if(sectorF && r.sector !== sectorF) return false;
     if(statusF === "repeat" && !r.repeat) return false;
@@ -885,6 +902,7 @@ function renderAll(){
     let av, bv;
     if(sortKey === "Sector (auto)"){ av = a.sector; bv = b.sector; }
     else if(sortKey === "Status"){ av = a.repeat?1:0; bv = b.repeat?1:0; }
+    else if(sortKey === "Amount INR"){ av = amountFor(a); bv = amountFor(b); }
     else { av = a.row[sortKey]; bv = b.row[sortKey]; }
     if(typeof av === "string") av = av.toLowerCase();
     if(typeof bv === "string") bv = bv.toLowerCase();
@@ -896,7 +914,7 @@ function renderAll(){
   });
 
   renderStats(rows);
-  renderChips();
+  renderChips(rows);
   renderTable(rows);
   renderSortArrows();
   window.__rowsForExport = rows;
@@ -905,16 +923,22 @@ function renderAll(){
 function renderStats(rows){
   document.getElementById("statTotal").textContent = rows.length;
   document.getElementById("statRepeat").textContent = rows.filter(r => r.repeat).length;
-  const totalCr = rows.reduce((s,r) => s + (Number(r.row["Amount INR"])||0), 0) / 1e7;
+  const totalCr = rows.reduce((s,r) => s + amountFor(r), 0) / 1e7;
   document.getElementById("statAmount").textContent = "\u20b9" + totalCr.toLocaleString(undefined,{maximumFractionDigits:1}) + " Cr";
   document.getElementById("statFunds").textContent = currentFund === "__all__" ? FUNDS.length : 1;
 }
-function renderChips(){
+function renderChips(rows){
   const chips = [];
   const sectorF = document.getElementById("sectorFilter").value;
   const statusF = document.getElementById("statusFilter").value;
   if(sectorF) chips.push(`<span class="chip">Sector: ${escapeHtml(sectorF)} <button onclick="clearFilter('sectorFilter')">\u00d7</button></span>`);
   if(statusF) chips.push(`<span class="chip">${statusF === "repeat" ? "Repeat only" : "Single fund only"} <button onclick="clearFilter('statusFilter')">\u00d7</button></span>`);
+  const untracked = (rows||[]).filter(amountUntracked);
+  if(untracked.length){
+    const names = untracked.map(r => r.row["Investor"]||"(unnamed)");
+    window.__untrackedSplit = names;
+    chips.push(`<span class="chip" style="background:#FDF4E3;border-color:#E6C98A;color:#8A6410;" title="${escapeHtml(names.join(", "))}">\u26a0 ${untracked.length} investor(s) have no per-fund split \u2014 showing their all-fund total <button onclick="console.log('No per-fund split:', window.__untrackedSplit)" style="color:#8A6410;">log</button></span>`);
+  }
   document.getElementById("chipRow").innerHTML = chips.join(" ");
 }
 function clearFilter(id){ document.getElementById(id).value = ""; applyFilters(); }
@@ -978,8 +1002,14 @@ function formatCell(col, r, rowIdx, editing){
   }
   let v = r.row[col];
   let display;
-  if(col === "Amount INR"){ const n = Number(v)||0; display = n ? n.toLocaleString("en-IN") : ""; }
+  if(col === "Amount INR"){ const n = amountFor(r); display = n ? n.toLocaleString("en-IN") : ""; }
   else { display = (v === null || v === undefined) ? "" : String(v); }
+  if(col === "Amount INR" && amountLocked(r)){
+    const note = hasFundSplit(r)
+      ? `${escapeHtml(currentFund)} share of a repeat LP across ${escapeHtml((r.funds||[]).join(", "))} — edit from the All investors view`
+      : `No per-fund split recorded — this is the all-fund total across ${escapeHtml((r.funds||[]).join(", "))}`;
+    return `<span title="${note}">${escapeHtml(display)}</span>`;
+  }
   if(editing && MASTER_COLS.includes(col)){
     return `<span contenteditable="true" data-idx="${rowIdx}" data-col="${escapeHtml(col)}" onblur="commitEdit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${escapeHtml(display)}</span>`;
   }
@@ -997,7 +1027,7 @@ function renderTable(rows){
   body.innerHTML = rows.map((r, rowIdx) => {
     const cells = cols.map((col,i) => {
       const stickyClass = i === 0 ? "sticky" : "";
-      const editableClass = editing && MASTER_COLS.includes(col) ? "editable" : "";
+      const editableClass = editing && MASTER_COLS.includes(col) && !(col === "Amount INR" && amountLocked(r)) ? "editable" : "";
       const descClass = col === "Comments" ? "desc" : "";
       const linksClass = col === "Links" ? "links-cell" : "";
       if(col === "Investor"){
@@ -1059,6 +1089,7 @@ function exportCsv(){
     const vals = cols.map(col => {
       if(col === "Sector (auto)") return r.sector;
       if(col === "Status") return r.repeat ? "Repeat \u00b7 " + (r.funds||[]).join(", ") : "Single fund";
+      if(col === "Amount INR") return amountFor(r);
       return r.row[col] ?? "";
     });
     lines.push(vals.map(v => `"${String(v).replace(/"/g,'""')}"`).join(","));
@@ -1117,7 +1148,7 @@ function renderMap(){
   }
   mapMarkersLayer.clearLayers();
   const rows = currentRows();
-  const amounts = rows.map(r => Number(r.row["Amount INR"])||0).filter(n => n > 0);
+  const amounts = rows.map(amountFor).filter(n => n > 0);
   const maxAmt = Math.max(1, ...amounts);
   const grouped = {};
   let plotted = 0, skipped = 0;
@@ -1130,7 +1161,7 @@ function renderMap(){
     const angle = n * 0.9, radius = Math.min(n * 0.18, 1.6);
     const lat = loc.coords[0] + (n > 1 ? Math.sin(angle) * radius * 0.08 : 0);
     const lng = loc.coords[1] + (n > 1 ? Math.cos(angle) * radius * 0.08 : 0);
-    const amt = Number(r.row["Amount INR"]) || 0;
+    const amt = amountFor(r);
     const radiusPx = 5 + Math.sqrt(amt / maxAmt) * 16;
     const marker = L.circleMarker([lat, lng], { radius: radiusPx, color: loc.known ? "#2F6FED" : "#B8842B", fillColor: loc.known ? "#2F6FED" : "#B8842B", fillOpacity: 0.55, weight: 1.5 });
     marker.bindPopup(`<b>${escapeHtml(r.row["Investor"]||"")}</b>` + (r.row["Investing Group"] ? `Group: ${escapeHtml(r.row["Investing Group"])}<br>` : "") + `\u20b9${(amt/1e7).toLocaleString(undefined,{maximumFractionDigits:2})} Cr<br>` + `${escapeHtml(r.row["Category"]||"")} \u00b7 ${escapeHtml(loc.label)}${!loc.known ? " (country-level)" : ""}`);
@@ -1146,7 +1177,7 @@ function renderGroups(){
   rows.forEach(r => {
     const key = (r.row["Investing Group"] || r.row["Investor"] || "Ungrouped").trim();
     if(!groups[key]) groups[key] = { key, total: 0, count: 0, rows: [] };
-    groups[key].total += Number(r.row["Amount INR"])||0;
+    groups[key].total += amountFor(r);
     groups[key].count += 1;
     groups[key].rows.push(r);
   });
@@ -1156,7 +1187,7 @@ function renderGroups(){
   container.innerHTML = list.map(g => {
     const pct = (g.total / maxTotal * 100).toFixed(1);
     const isOpen = openGroupKey === g.key;
-    const rowsHtml = g.rows.map(r => `<tr><td>${escapeHtml(r.row["Investor"]||"")}</td><td>${escapeHtml(r.row["City"]||r.row["Domicile"]||"")}</td><td>${escapeHtml(r.row["Category"]||"")}</td><td class="num">\u20b9${(Number(r.row["Amount INR"])||0).toLocaleString("en-IN")}</td></tr>`).join("");
+    const rowsHtml = g.rows.map(r => `<tr><td>${escapeHtml(r.row["Investor"]||"")}</td><td>${escapeHtml(r.row["City"]||r.row["Domicile"]||"")}</td><td>${escapeHtml(r.row["Category"]||"")}</td><td class="num">\u20b9${amountFor(r).toLocaleString("en-IN")}</td></tr>`).join("");
     return `
       <div class="group-row" onclick="toggleGroup('${g.key.replace(/'/g,"\\'")}')">
         <div><div class="gname">${escapeHtml(g.key)}</div><div class="gmeta">${g.count} entit${g.count === 1 ? "y" : "ies"}</div><div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div></div>
