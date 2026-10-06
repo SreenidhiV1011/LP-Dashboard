@@ -194,6 +194,60 @@
   .bar-track{ height:5px; background:var(--line); border-radius:3px; margin-top:6px; overflow:hidden; }
   .bar-fill{ height:100%; background:var(--accent); }
 
+  /* ===== Dashboard ===== */
+  .dash-grid{ display:grid; gap:12px; margin-bottom:12px; }
+  .dash-grid.c3{ grid-template-columns:1.3fr 0.85fr 1fr; }
+  .dash-grid.c3.single{ grid-template-columns:0.9fr 1fr; }
+  .dash-grid.c2{ grid-template-columns:1.55fr 1fr; }
+  .panel{ border:1px solid var(--line); border-radius:var(--radius); background:var(--card); padding:14px 16px; min-width:0; }
+  .panel h3{ margin:0 0 12px; font-size:12.5px; font-weight:600; color:var(--ink); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .panel h3 .hint{ font-size:11px; color:var(--ink-faintest); font-weight:400; }
+  .vbars{ display:flex; align-items:flex-end; gap:10px; height:176px; }
+  .vbar{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; min-width:0; }
+  .vbar .col{ width:100%; max-width:48px; min-height:2px; border-radius:4px 4px 0 0; background:var(--accent); }
+  .vbar:hover .col{ opacity:.78; }
+  .vbar .val{ font-size:11px; font-weight:600; margin-bottom:4px; white-space:nowrap; }
+  .vbar .lab{ font-size:10.5px; color:var(--ink-faint); margin-top:6px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .donut-wrap{ display:flex; align-items:center; gap:14px; }
+  .donut-legend{ font-size:12px; min-width:0; }
+  .donut-legend .r{ display:flex; align-items:center; gap:7px; margin-bottom:10px; }
+  .donut-legend .sw{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .dist{ font-size:12px; }
+  .dist .r{ display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+  .dist .sw{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .dist .k{ flex:1; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dist .v{ font-weight:600; white-space:nowrap; }
+  .stack{ display:flex; height:9px; border-radius:5px; overflow:hidden; margin-bottom:13px; background:var(--line-soft); }
+  .mini-table{ width:100%; border-collapse:collapse; table-layout:fixed; }
+  .mini-table th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-faint); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--line); }
+  .mini-table td{ padding:7px 8px; font-size:12px; border-bottom:1px solid var(--line-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mini-table tr:last-child td{ border-bottom:none; }
+  .mini-table td.rank{ color:var(--ink-faintest); }
+  .mini-table td.r, .mini-table th.r{ text-align:right; }
+  .insight-strip{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .insight{ border:1px solid var(--line); border-radius:var(--radius); background:var(--card); padding:12px 16px; }
+  .insight .v{ font-size:16px; font-weight:600; color:var(--accent-dark); }
+  .insight .k{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .insight .n{ font-size:11px; color:var(--ink-faintest); margin-top:2px; }
+
+  /* ===== City drill-down ===== */
+  .city-layout{ display:grid; grid-template-columns:234px minmax(0,1fr); gap:12px; align-items:start; }
+  .city-list{ border:1px solid var(--line); border-radius:var(--radius); background:var(--card); max-height:540px; overflow-y:auto; }
+  .city-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 12px; border-bottom:1px solid var(--line-soft); cursor:pointer; font-size:12.5px; }
+  .city-item:last-child{ border-bottom:none; }
+  .city-item:hover{ background:var(--page); }
+  .city-item.active{ background:var(--accent); color:#fff; }
+  .city-item .c{ font-size:11px; color:var(--ink-faintest); white-space:nowrap; }
+  .city-item.active .c{ color:#D9E6FD; }
+  .city-item.blanks{ color:var(--ink-faintest); }
+  .city-head{ padding:10px 12px; border-bottom:1px solid var(--line); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-faint); position:sticky; top:0; background:var(--card); }
+  .city-detail{ margin-top:12px; }
+  .city-detail .ct-head{ display:flex; align-items:baseline; gap:10px; margin-bottom:10px; }
+  .city-detail .ct-head h3{ margin:0; font-size:15px; font-weight:600; }
+  .city-detail .ct-head .m{ font-size:12px; color:var(--ink-faint); }
+  .city-detail .ct-head .x{ margin-left:auto; cursor:pointer; color:var(--ink-faintest); font-size:16px; }
+  .city-detail .ct-head .x:hover{ color:var(--ink); }
+
   @media (max-width: 900px){
     .app{ grid-template-columns:1fr; }
     .sidebar{ display:none; }
@@ -270,10 +324,48 @@
         <div class="stat"><p class="l">Investors</p><p class="v num" id="statTotal">0</p></div>
         <div class="stat"><p class="l">Repeat LPs</p><p class="v num" id="statRepeat">0</p></div>
         <div class="stat"><p class="l">Total committed</p><p class="v num accent" id="statAmount">&#8377;0 Cr</p></div>
+        <div class="stat"><p class="l">Countries</p><p class="v num" id="statCountries">0</p></div>
         <div class="stat"><p class="l">Funds tracked</p><p class="v num" id="statFunds">0</p></div>
       </div>
 
       <div id="tableView">
+        <div id="dashboard">
+          <div class="dash-grid c3" id="dashRow1">
+            <div class="panel" id="panelByFund">
+              <h3>LPs by fund
+                <span class="unit-toggle">
+                  <button class="active" id="dashMetricCount" onclick="setDashFundMetric('count')">Count</button>
+                  <button id="dashMetricAmt" onclick="setDashFundMetric('amount')">Commitment</button>
+                </span>
+              </h3>
+              <div id="dashByFund"></div>
+            </div>
+            <div class="panel">
+              <h3>Repeat vs new LPs</h3>
+              <div id="dashRepeat"></div>
+            </div>
+            <div class="panel">
+              <h3>Geographical spread <span class="hint" id="dashGeoHint"></span></h3>
+              <div id="dashGeo"></div>
+            </div>
+          </div>
+          <div class="dash-grid c2">
+            <div class="panel">
+              <h3>Top 10 LPs by commitment</h3>
+              <div id="dashTop"></div>
+            </div>
+            <div class="panel">
+              <h3>LP type mix</h3>
+              <div id="dashTypes"></div>
+              <h3 style="margin-top:18px;">Repeat LPs <span class="hint" id="dashRepeatHint"></span></h3>
+              <div id="dashRepeatList"></div>
+            </div>
+          </div>
+          <div class="insight-strip" id="dashInsights"></div>
+          <div class="footnote" style="margin-bottom:18px;">
+            These panels summarise <b id="dashScopeName">all funds</b> and are not affected by the search, sector or amount filters below.
+          </div>
+        </div>
         <div class="range-panel">
           <div class="range-top">
             <h3>Commitment amount</h3>
@@ -340,8 +432,17 @@
           <span><span class="sw" style="background:#B8842B"></span>City unknown &mdash; plotted at country centroid</span>
           <span style="margin-left:auto; color:var(--ink-faintest);">Pin size &asymp; commitment size</span>
         </div>
-        <div id="investorMap"></div>
-        <div class="footnote" id="mapFootnote"></div>
+        <div class="city-layout">
+          <div class="city-list">
+            <div class="city-head">Cities</div>
+            <div id="cityList"></div>
+          </div>
+          <div>
+            <div id="investorMap"></div>
+            <div class="footnote" id="mapFootnote"></div>
+          </div>
+        </div>
+        <div class="city-detail" id="cityDetail" style="display:none;"></div>
       </div>
 
       <div id="groupsView">
@@ -397,12 +498,38 @@ const CITY_COORDS = {
   "NGP": [21.1458, 79.0882, "Nagpur"], "AGR": [27.1767, 78.0081, "Agra"], "JPR": [26.9124, 75.7873, "Jaipur (best guess)"],
   "HKG": [22.3193, 114.1694, "Hong Kong"], "LON": [51.5072, -0.1276, "London"], "Abu Dhabi": [24.4539, 54.3773, "Abu Dhabi"],
   "Dubai": [25.2048, 55.2708, "Dubai"], "Tokyo": [35.6762, 139.6503, "Tokyo"], "London": [51.5072, -0.1276, "London"],
+  /* Aliases that must collapse onto an existing label, not stand as separate cities. */
+  "Nagpur": [21.1458, 79.0882, "Nagpur"], "HK": [22.3193, 114.1694, "Hong Kong"],
+  "SFO": [37.7749, -122.4194, "San Francisco"],
+  "Panaji": [15.4909, 73.8278, "Panaji"], "PUN": [18.5204, 73.8567, "Pune"],
+  "KL": [3.1390, 101.6869, "Kuala Lumpur"], "NYC": [40.7128, -74.0060, "New York"],
+  "Washington DC": [38.9072, -77.0369, "Washington DC"], "Zurich": [47.3769, 8.5417, "Zurich"],
+  "Muscat": [23.5880, 58.3829, "Muscat"], "Manila": [14.5995, 120.9842, "Manila"],
+  "Amsterdam": [52.3676, 4.9041, "Amsterdam"], "Abuja": [9.0765, 7.3986, "Abuja"],
+  "Sofia": [42.6977, 23.3219, "Sofia"], "Roseliare": [50.9444, 3.1250, "Roeselare"],
 };
 const DOMICILE_COORDS = {
   "IN": [22.9734, 78.6569, "India"], "SG": [1.3521, 103.8198, "Singapore"], "UAE": [23.4241, 53.8478, "UAE"],
   "US": [37.0902, -95.7129, "USA"], "USA": [37.0902, -95.7129, "USA"], "UK": [55.3781, -3.4360, "UK"],
-  "HKG": [22.3193, 114.1694, "Hong Kong"], "Japan": [36.2048, 138.2529, "Japan"],
+  "HKG": [22.3193, 114.1694, "Hong Kong"], "HK": [22.3193, 114.1694, "Hong Kong"],
+  "Japan": [36.2048, 138.2529, "Japan"], "Germany": [51.1657, 10.4515, "Germany"],
+  "Switzerland": [46.8182, 8.2275, "Switzerland"], "Australia": [-25.2744, 133.7751, "Australia"],
+  "Belgium": [50.5039, 4.4699, "Belgium"], "Bulgaria": [42.7339, 25.4858, "Bulgaria"],
+  "Canada": [56.1304, -106.3468, "Canada"], "Malaysia": [4.2105, 101.9758, "Malaysia"],
+  "Mauritius": [-20.3484, 57.5522, "Mauritius"], "NZ": [-40.9006, 174.8860, "New Zealand"],
+  "Netherlands": [52.1326, 5.2913, "Netherlands"], "Nigeria": [9.0820, 8.6753, "Nigeria"],
+  "Oman": [21.4735, 55.9754, "Oman"], "Phillipines": [12.8797, 121.7740, "Philippines"],
 };
+/* Sheets spell the same place inconsistently, so match on a case-folded key rather than
+   the literal string — otherwise a future upload typing "mumbai" splits it off as its own city. */
+function ciIndex(table){
+  const o = {};
+  Object.keys(table).forEach(k => { o[k.toLowerCase()] = table[k]; });
+  return o;
+}
+const CITY_CI = ciIndex(CITY_COORDS), DOMICILE_CI = ciIndex(DOMICILE_COORDS);
+function cityCoords(v){ return CITY_CI[String(v||"").trim().toLowerCase()] || null; }
+function domicileCoords(v){ return DOMICILE_CI[String(v||"").trim().toLowerCase()] || null; }
 
 let INVESTORS = [];
 let POSSIBLE_MATCHES = [];
@@ -863,6 +990,168 @@ function renderGroupSummary(){
       <div style="height:4px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden;"><div style="height:100%;background:var(--accent);width:${(byFund[f]/maxF*100).toFixed(0)}%"></div></div>
     </div>`).join("") : "";
 }
+/* ============ Dashboard ============
+   City/Domicile are entered inconsistently (DXB and Dubai, US and USA both occur).
+   CITY_COORDS/DOMICILE_COORDS already map every known variant to one display name,
+   so they double as the canonical-label lookup. Unknown values pass through as typed. */
+const DASH_PALETTE = ["#2F6FED","#2BB6A3","#7B5BD6","#E8883A","#3FB6DE","#D85A30","#B8842B","#8A93A3"];
+const REGION_OF = { "India":"Asia", "Singapore":"Asia", "Hong Kong":"Asia", "Japan":"Asia",
+  "UAE":"Middle East", "USA":"North America", "UK":"Europe" };
+
+function cleanLabel(s){ return String(s||"").replace(/\s*\(best guess\)\s*$/i,"").trim(); }
+function cityOf(row){
+  const c = String(row["City"]||"").trim();
+  if(!c) return "";
+  const hit = cityCoords(c);
+  return hit ? cleanLabel(hit[2]) : c;
+}
+function countryOf(row){
+  const d = String(row["Domicile"]||"").trim();
+  if(!d) return "";
+  const hit = domicileCoords(d);
+  return hit ? cleanLabel(hit[2]) : d;
+}
+function crStr(n, dp){ return "₹" + (n/1e7).toLocaleString(undefined,{maximumFractionDigits: dp===undefined?1:dp}) + " Cr"; }
+/* A repeat LP with no recorded split can't be attributed to one fund, so it contributes 0
+   rather than being counted in full against every fund it appears in. */
+function amountInFund(r, fundId){
+  if(r.fundAmounts && Object.prototype.hasOwnProperty.call(r.fundAmounts, fundId)) return Number(r.fundAmounts[fundId])||0;
+  return (r.funds||[]).length === 1 ? (Number(r.row["Amount INR"])||0) : 0;
+}
+function tally(rows, keyFn){
+  const o = {};
+  rows.forEach(r => { const k = keyFn(r); if(k) o[k] = (o[k]||0) + 1; });
+  return Object.entries(o).sort((a,b) => b[1]-a[1]);
+}
+
+let dashFundMetric = "count";
+window.setDashFundMetric = function(m){
+  dashFundMetric = m;
+  document.getElementById("dashMetricCount").classList.toggle("active", m === "count");
+  document.getElementById("dashMetricAmt").classList.toggle("active", m === "amount");
+  renderDashboard();
+};
+
+function renderDashboard(){
+  const rows = currentRows();
+  const allFunds = currentFund === "__all__";
+  document.getElementById("dashScopeName").textContent = allFunds ? "all funds" : currentFund;
+  document.getElementById("dashRow1").classList.toggle("single", !allFunds);
+  document.getElementById("panelByFund").style.display = allFunds ? "" : "none";
+  if(rows.length === 0){
+    ["dashByFund","dashRepeat","dashGeo","dashTop","dashTypes","dashRepeatList"].forEach(id =>
+      document.getElementById(id).innerHTML = `<p class="empty">No data.</p>`);
+    document.getElementById("dashInsights").innerHTML = "";
+    return;
+  }
+
+  /* --- LPs by fund --- */
+  if(allFunds){
+    const data = FUNDS.map(f => ({
+      label: f.label,
+      count: INVESTORS.filter(r => (r.funds||[]).includes(f.id)).length,
+      amount: INVESTORS.filter(r => (r.funds||[]).includes(f.id)).reduce((s,r) => s + amountInFund(r, f.id), 0)
+    }));
+    const key = dashFundMetric === "count" ? "count" : "amount";
+    const max = Math.max(1, ...data.map(d => d[key]));
+    document.getElementById("dashByFund").innerHTML = `<div class="vbars">` + data.map((d,i) => `
+      <div class="vbar" title="${escapeHtml(d.label)}: ${d.count} LPs · ${crStr(d.amount)}">
+        <div class="val">${key === "count" ? d.count : crStr(d.amount)}</div>
+        <div class="col" style="height:${(d[key]/max*100).toFixed(1)}%;background:${DASH_PALETTE[i % DASH_PALETTE.length]}"></div>
+        <div class="lab">${escapeHtml(d.label)}</div>
+      </div>`).join("") + `</div>`;
+  }
+
+  /* --- Repeat vs new --- */
+  const repeatRows = rows.filter(r => r.repeat);
+  const rep = repeatRows.length, nw = rows.length - rep, tot = rows.length;
+  const r0 = 52, circ = 2 * Math.PI * r0, frac = tot ? rep/tot : 0;
+  document.getElementById("dashRepeat").innerHTML = `
+    <div class="donut-wrap">
+      <svg width="132" height="132" viewBox="0 0 140 140" style="flex:none;">
+        <circle cx="70" cy="70" r="${r0}" fill="none" stroke="#9FC0F7" stroke-width="22"/>
+        <circle cx="70" cy="70" r="${r0}" fill="none" stroke="#185FA5" stroke-width="22"
+          stroke-dasharray="${(circ*frac).toFixed(1)} ${(circ*(1-frac)).toFixed(1)}" transform="rotate(-90 70 70)"/>
+        <text x="70" y="68" text-anchor="middle" font-size="20" font-weight="600" fill="#1A2233" font-family="JetBrains Mono, monospace">${tot}</text>
+        <text x="70" y="86" text-anchor="middle" font-size="10" fill="#8A93A3">Total LPs</text>
+      </svg>
+      <div class="donut-legend">
+        <div class="r"><span class="sw" style="background:#185FA5"></span><span>Repeat<br><b class="num">${rep}</b> (${tot?Math.round(rep/tot*100):0}%)</span></div>
+        <div class="r"><span class="sw" style="background:#9FC0F7"></span><span>New<br><b class="num">${nw}</b> (${tot?Math.round(nw/tot*100):0}%)</span></div>
+      </div>
+    </div>`;
+
+  /* --- Geographical spread (by country) --- */
+  const countries = tally(rows, r => countryOf(r.row));
+  const regions = new Set(countries.map(([c]) => REGION_OF[c] || "Other"));
+  const noCountry = rows.filter(r => !countryOf(r.row)).length;
+  document.getElementById("dashGeoHint").textContent =
+    `${countries.length} ${countries.length === 1 ? "country" : "countries"} · ${regions.size} region${regions.size === 1 ? "" : "s"}`;
+  const geoShown = countries.slice(0,6);
+  const geoRest = countries.slice(6).reduce((s,[,n]) => s+n, 0);
+  document.getElementById("dashGeo").innerHTML = `<div class="dist">` +
+    geoShown.map(([c,n],i) => `
+      <div class="r"><span class="sw" style="background:${DASH_PALETTE[i % DASH_PALETTE.length]}"></span>
+        <span class="k">${escapeHtml(c)}</span><span class="v num">${n} (${Math.round(n/rows.length*100)}%)</span></div>`).join("") +
+    (geoRest ? `<div class="r"><span class="sw" style="background:#C6CCD6"></span><span class="k">Others</span><span class="v num">${geoRest} (${Math.round(geoRest/rows.length*100)}%)</span></div>` : "") +
+    (noCountry ? `<div class="r"><span class="sw" style="background:transparent"></span><span class="k" style="color:var(--ink-faintest)">No domicile recorded</span><span class="v num" style="color:var(--ink-faintest)">${noCountry}</span></div>` : "") +
+    `</div>`;
+
+  /* --- Top 10 by commitment --- */
+  const top = [...rows].sort((a,b) => amountFor(b) - amountFor(a)).slice(0,10);
+  document.getElementById("dashTop").innerHTML = `
+    <table class="mini-table">
+      <colgroup><col style="width:22px"><col><col style="width:68px"><col style="width:86px"><col style="width:96px"><col style="width:120px"></colgroup>
+      <thead><tr><th></th><th>LP name</th><th>Type</th><th>Country</th><th class="r">Commitment</th><th>Funds</th></tr></thead>
+      <tbody>${top.map((r,i) => `
+        <tr>
+          <td class="rank num">${i+1}</td>
+          <td title="${escapeHtml(r.row["Investor"]||"")}">${escapeHtml(r.row["Investor"]||"")}</td>
+          <td>${escapeHtml(r.row["Category"]||"—")}</td>
+          <td>${escapeHtml(countryOf(r.row) || "—")}</td>
+          <td class="r num">${crStr(amountFor(r), 2)}</td>
+          <td title="${escapeHtml((r.funds||[]).join(", "))}">${escapeHtml((r.funds||[]).join(", "))}</td>
+        </tr>`).join("")}</tbody>
+    </table>`;
+
+  /* --- LP type mix --- */
+  const types = tally(rows, r => String(r.row["Category"]||"").trim());
+  const typeTotal = types.reduce((s,[,n]) => s+n, 0) || 1;
+  document.getElementById("dashTypes").innerHTML =
+    `<div class="stack">` + types.map(([,n],i) =>
+      `<span style="width:${(n/typeTotal*100).toFixed(2)}%;background:${DASH_PALETTE[i % DASH_PALETTE.length]}"></span>`).join("") + `</div>` +
+    `<div class="dist">` + types.map(([t,n],i) => `
+      <div class="r"><span class="sw" style="background:${DASH_PALETTE[i % DASH_PALETTE.length]}"></span>
+        <span class="k">${escapeHtml(t)}</span><span class="v num">${Math.round(n/typeTotal*100)}%</span></div>`).join("") + `</div>`;
+
+  /* --- Repeat LP detail --- */
+  document.getElementById("dashRepeatHint").textContent = rep ? `${rep} repeat LP${rep === 1 ? "" : "s"}` : "";
+  document.getElementById("dashRepeatList").innerHTML = rep === 0
+    ? `<p style="margin:0;font-size:12px;color:var(--ink-faintest);">No LP appears in more than one fund in this view.</p>`
+    : `<table class="mini-table">
+        <colgroup><col><col style="width:62px"><col style="width:96px"></colgroup>
+        <thead><tr><th>LP name</th><th class="r">Funds</th><th class="r">Total</th></tr></thead>
+        <tbody>${[...repeatRows].sort((a,b) => (b.funds||[]).length - (a.funds||[]).length).map(r => `
+          <tr>
+            <td title="${escapeHtml(r.row["Investor"]||"")}">${escapeHtml(r.row["Investor"]||"")}</td>
+            <td class="r num" title="${escapeHtml((r.funds||[]).join(", "))}">${(r.funds||[]).length}</td>
+            <td class="r num">${crStr(Number(r.row["Amount INR"])||0, 2)}</td>
+          </tr>`).join("")}</tbody>
+      </table>`;
+
+  /* --- Key insights --- */
+  const amtsDesc = rows.map(amountFor).sort((a,b) => b-a);
+  const grand = amtsDesc.reduce((s,n) => s+n, 0);
+  const top3 = amtsDesc.slice(0,3).reduce((s,n) => s+n, 0);
+  const intl = rows.filter(r => { const c = countryOf(r.row); return c && c !== "India"; }).length;
+  const topCity = tally(rows, r => cityOf(r.row))[0];
+  document.getElementById("dashInsights").innerHTML = `
+    <div class="insight"><div class="v num">${tot ? Math.round(rep/tot*100) : 0}%</div><div class="k">of LPs are repeat investors</div><div class="n">${rep} out of ${tot}</div></div>
+    <div class="insight"><div class="v num">${countries.length}</div><div class="k">countries with LP presence</div><div class="n">${regions.size} region${regions.size === 1 ? "" : "s"}</div></div>
+    <div class="insight"><div class="v num">${grand ? Math.round(top3/grand*100) : 0}%</div><div class="k">contributed by the top 3 LPs</div><div class="n">${crStr(top3)} of ${crStr(grand)}</div></div>
+    <div class="insight"><div class="v num">${topCity ? escapeHtml(topCity[0]) : "—"}</div><div class="k">largest city by LP count</div><div class="n">${topCity ? topCity[1] + " LPs · " + intl + " intl. overall" : ""}</div></div>`;
+}
+
 function renderHeader(){
   const tr = document.getElementById("headerRow");
   const cols = currentAllCols();
@@ -914,6 +1203,7 @@ function renderAll(){
   });
 
   renderStats(rows);
+  renderDashboard();
   renderChips(rows);
   renderTable(rows);
   renderSortArrows();
@@ -926,6 +1216,7 @@ function renderStats(rows){
   const totalCr = rows.reduce((s,r) => s + amountFor(r), 0) / 1e7;
   document.getElementById("statAmount").textContent = "\u20b9" + totalCr.toLocaleString(undefined,{maximumFractionDigits:1}) + " Cr";
   document.getElementById("statFunds").textContent = currentFund === "__all__" ? FUNDS.length : 1;
+  document.getElementById("statCountries").textContent = new Set(rows.map(r => countryOf(r.row)).filter(Boolean)).size;
 }
 function renderChips(rows){
   const chips = [];
@@ -1134,10 +1425,10 @@ function syncFromInputs(){
 function toggleNoCap(){ maxRange.disabled = noCapBox.checked; maxInput.disabled = noCapBox.checked; applyFilters(); }
 
 function resolveCoords(row){
-  const city = (row["City"]||"").toString().trim();
-  if(city && CITY_COORDS[city]) return { coords: CITY_COORDS[city], known: true, label: CITY_COORDS[city][2] };
-  const dom = (row["Domicile"]||"").toString().trim();
-  if(dom && DOMICILE_COORDS[dom]) return { coords: DOMICILE_COORDS[dom], known: false, label: DOMICILE_COORDS[dom][2] };
+  const cityHit = cityCoords(row["City"]);
+  if(cityHit) return { coords: cityHit, known: true, label: cityHit[2] };
+  const domHit = domicileCoords(row["Domicile"]);
+  if(domHit) return { coords: domHit, known: false, label: domHit[2] };
   return null;
 }
 function renderMap(){
@@ -1164,11 +1455,86 @@ function renderMap(){
     const amt = amountFor(r);
     const radiusPx = 5 + Math.sqrt(amt / maxAmt) * 16;
     const marker = L.circleMarker([lat, lng], { radius: radiusPx, color: loc.known ? "#2F6FED" : "#B8842B", fillColor: loc.known ? "#2F6FED" : "#B8842B", fillOpacity: 0.55, weight: 1.5 });
-    marker.bindPopup(`<b>${escapeHtml(r.row["Investor"]||"")}</b>` + (r.row["Investing Group"] ? `Group: ${escapeHtml(r.row["Investing Group"])}<br>` : "") + `\u20b9${(amt/1e7).toLocaleString(undefined,{maximumFractionDigits:2})} Cr<br>` + `${escapeHtml(r.row["Category"]||"")} \u00b7 ${escapeHtml(loc.label)}${!loc.known ? " (country-level)" : ""}`);
+    const pinCity = cityOf(r.row);
+    marker.bindPopup(`<b>${escapeHtml(r.row["Investor"]||"")}</b>` + (r.row["Investing Group"] ? `Group: ${escapeHtml(r.row["Investing Group"])}<br>` : "") + `\u20b9${(amt/1e7).toLocaleString(undefined,{maximumFractionDigits:2})} Cr<br>` + `${escapeHtml(r.row["Category"]||"")} \u00b7 ${escapeHtml(loc.label)}${!loc.known ? " (country-level)" : ""}`
+      + (pinCity ? `<br><a href="javascript:void(0)" onclick="selectCity('${pinCity.replace(/'/g,"\\'")}')">See all ${escapeHtml(pinCity)} investors</a>` : ""));
     marker.addTo(mapMarkersLayer);
   });
   document.getElementById("mapFootnote").innerHTML = `<b>${plotted}</b> investor(s) plotted. ` + (skipped > 0 ? `<b>${skipped}</b> have no recognizable city or domicile and aren't shown.` : "Every investor in this view has a location on file.");
   setTimeout(() => mapInstance.invalidateSize(), 50);
+  renderCityList();
+}
+
+/* ============ City drill-down ============ */
+let selectedCity = null;
+
+function renderCityList(){
+  const rows = currentRows();
+  const byCity = {};
+  let blanks = 0;
+  rows.forEach(r => {
+    const c = cityOf(r.row);
+    if(!c){ blanks++; return; }
+    if(!byCity[c]) byCity[c] = { city: c, rows: [], total: 0 };
+    byCity[c].rows.push(r);
+    byCity[c].total += amountFor(r);
+  });
+  const list = Object.values(byCity).sort((a,b) => b.rows.length - a.rows.length || b.total - a.total);
+  if(selectedCity && !byCity[selectedCity]) selectedCity = null;
+  document.getElementById("cityList").innerHTML = list.map(g => `
+    <div class="city-item ${selectedCity === g.city ? "active" : ""}" onclick="selectCity('${g.city.replace(/'/g,"\\'")}')">
+      <span>${escapeHtml(g.city)}</span>
+      <span class="c">${g.rows.length} · ${crStr(g.total)}</span>
+    </div>`).join("")
+    + (blanks ? `<div class="city-item blanks" onclick="selectCity('__none__')">
+        <span>No city recorded</span><span class="c">${blanks}</span></div>` : "");
+  renderCityDetail();
+}
+
+window.selectCity = function(city){
+  selectedCity = selectedCity === city ? null : city;
+  renderCityList();
+  if(selectedCity && selectedCity !== "__none__" && mapInstance){
+    const entry = Object.entries(CITY_COORDS).find(([,v]) => cleanLabel(v[2]) === selectedCity);
+    if(entry) mapInstance.setView([entry[1][0], entry[1][1]], 7, { animate: true });
+  } else if(!selectedCity && mapInstance){
+    mapInstance.setView([20, 30], 2, { animate: true });
+  }
+  if(selectedCity) document.getElementById("cityDetail").scrollIntoView({ behavior: "smooth", block: "nearest" });
+};
+
+function renderCityDetail(){
+  const panel = document.getElementById("cityDetail");
+  if(!selectedCity){ panel.style.display = "none"; panel.innerHTML = ""; return; }
+  const noCity = selectedCity === "__none__";
+  const rows = currentRows()
+    .filter(r => noCity ? !cityOf(r.row) : cityOf(r.row) === selectedCity)
+    .sort((a,b) => amountFor(b) - amountFor(a));
+  const total = rows.reduce((s,r) => s + amountFor(r), 0);
+  panel.style.display = "block";
+  panel.innerHTML = `
+    <div class="ct-head">
+      <h3>${noCity ? "No city recorded" : escapeHtml(selectedCity)}</h3>
+      <span class="m">${rows.length} investor${rows.length === 1 ? "" : "s"} · ${crStr(total)} committed</span>
+      <span class="x" title="Clear selection" onclick="selectCity(null)">&times;</span>
+    </div>
+    ${noCity ? `<p class="subtitle" style="margin:-4px 0 10px;">These investors have no City value on their record — they're plotted at their country centroid on the map.</p>` : ""}
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Investor</th><th>Investing group</th><th>Domicile</th><th>Category</th><th>Relationship</th><th style="text-align:right;">Amount INR</th><th>Funds</th><th>Description</th></tr></thead>
+        <tbody>${rows.map(r => `
+          <tr class="${r.repeat ? "repeat" : ""}">
+            <td class="sticky"><span class="iname">${escapeHtml(r.row["Investor"]||"")}</span></td>
+            <td>${escapeHtml(r.row["Investing Group"]||"")}</td>
+            <td>${escapeHtml(countryOf(r.row)||"")}</td>
+            <td>${escapeHtml(r.row["Category"]||"")}</td>
+            <td>${escapeHtml(r.row["Relationship"]||"")}</td>
+            <td class="num" style="text-align:right;">${amountFor(r).toLocaleString("en-IN")}</td>
+            <td>${escapeHtml((r.funds||[]).join(", "))}</td>
+            <td class="desc">${escapeHtml(r.row["Comments"]||"")}</td>
+          </tr>`).join("")}</tbody>
+      </table>
+    </div>`;
 }
 
 function renderGroups(){
