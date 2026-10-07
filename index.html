@@ -322,7 +322,7 @@
 
       <div class="stat-strip">
         <div class="stat"><p class="l">Investors</p><p class="v num" id="statTotal">0</p></div>
-        <div class="stat"><p class="l">Repeat LPs</p><p class="v num" id="statRepeat">0</p></div>
+        <div class="stat" onclick="showRepeatLPs()" style="cursor:pointer;" title="Show only repeat LPs in the table below"><p class="l">Repeat LPs</p><p class="v num" id="statRepeat">0</p></div>
         <div class="stat"><p class="l">Total committed</p><p class="v num accent" id="statAmount">&#8377;0 Cr</p></div>
         <div class="stat"><p class="l">Countries</p><p class="v num" id="statCountries">0</p></div>
         <div class="stat"><p class="l">Funds tracked</p><p class="v num" id="statFunds">0</p></div>
@@ -735,21 +735,43 @@ async function handleUpload(e){
   const reader = new FileReader();
   reader.onload = async (evt) => {
     const wb = XLSX.read(evt.target.result, { type: "binary" });
-    let total = 0, flagged = 0;
+    const fileBase = file.name.replace(/\.[^.]+$/, "").trim();
+
+    const sheets = [];
     for(const sheetName of wb.SheetNames){
-      const ws = wb.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: "" });
       if(rows.length < 2) continue;
-      const header = rows[0];
-      const map = guessColumns(header);
+      const map = guessColumns(rows[0]);
       if(map["Investor"] === undefined) continue;
+      sheets.push({ sheetName, rows, map });
+    }
+    if(sheets.length === 0){
+      setStatusDot(false);
+      alert("Nothing recognizable found — check that the sheet has a column that looks like an investor name.");
+      return;
+    }
+
+    for(const s of sheets){
+      const suggested = sheets.length === 1 ? (fileBase || s.sheetName) : `${fileBase} — ${s.sheetName}`;
+      const answer = prompt(
+        `Fund name for ${sheets.length === 1 ? "this upload" : `sheet "${s.sheetName}"`} (${s.rows.length - 1} rows).\n` +
+        `Use an existing fund name to merge into it, or type a new one. Cancel to skip.` +
+        (FUNDS.length ? `\n\nExisting funds: ${FUNDS.map(f => f.label).join(", ")}` : ""),
+        suggested);
+      if(answer === null){ s.skip = true; continue; }
+      s.fundId = answer.trim() || suggested;
+    }
+
+    let total = 0, flagged = 0;
+    for(const { rows, map, fundId, skip } of sheets){
+      if(skip) continue;
       for(let r = 1; r < rows.length; r++){
         const dataRow = rows[r];
         if(!dataRow || !dataRow[map["Investor"]]) continue;
         const rowObj = {}; MASTER_COLS.forEach(c => rowObj[c] = "");
         Object.keys(map).forEach(col => { rowObj[col] = dataRow[map[col]] ?? ""; });
         const sector = tagSector(rowObj);
-        const result = await processNewRow(rowObj, sector, sheetName);
+        const result = await processNewRow(rowObj, sector, fundId);
         total++;
         if(result === "flagged") flagged++;
       }
@@ -757,7 +779,7 @@ async function handleUpload(e){
     setStatusDot(false);
     alert(total > 0
       ? `Upload complete \u2014 ${total} row(s) processed.` + (flagged > 0 ? ` ${flagged} possible match(es) need your review \u2014 check the bell icon.` : "")
-      : "Nothing recognizable found \u2014 check that the sheet has a column that looks like an investor name.");
+      : "Nothing imported \u2014 all sheets were skipped.");
   };
   reader.readAsBinaryString(file);
   e.target.value = "";
@@ -888,6 +910,12 @@ window.showMapView = function(){
   document.getElementById("pageTitle").textContent = "Location";
   document.getElementById("pageSubtitle").textContent = "Every investor in " + (currentFund === "__all__" ? "all funds" : currentFund) + ", pinned by city (or country when city isn't recorded)";
   renderMap();
+};
+window.showRepeatLPs = function(){
+  selectFund(currentFund);
+  document.getElementById("statusFilter").value = "repeat";
+  applyFilters();
+  document.querySelector(".table-scroll").scrollIntoView({ behavior:"smooth", block:"start" });
 };
 window.showGroupsView = function(){
   setViewMode("groups");
@@ -1129,12 +1157,12 @@ function renderDashboard(){
   document.getElementById("dashRepeatList").innerHTML = rep === 0
     ? `<p style="margin:0;font-size:12px;color:var(--ink-faintest);">No LP appears in more than one fund in this view.</p>`
     : `<table class="mini-table">
-        <colgroup><col><col style="width:62px"><col style="width:96px"></colgroup>
-        <thead><tr><th>LP name</th><th class="r">Funds</th><th class="r">Total</th></tr></thead>
+        <colgroup><col><col style="width:150px"><col style="width:96px"></colgroup>
+        <thead><tr><th>LP name</th><th>Funds</th><th class="r">Total</th></tr></thead>
         <tbody>${[...repeatRows].sort((a,b) => (b.funds||[]).length - (a.funds||[]).length).map(r => `
           <tr>
             <td title="${escapeHtml(r.row["Investor"]||"")}">${escapeHtml(r.row["Investor"]||"")}</td>
-            <td class="r num" title="${escapeHtml((r.funds||[]).join(", "))}">${(r.funds||[]).length}</td>
+            <td title="${escapeHtml((r.funds||[]).join(", "))}">${escapeHtml((r.funds||[]).join(", "))}</td>
             <td class="r num">${crStr(Number(r.row["Amount INR"])||0, 2)}</td>
           </tr>`).join("")}</tbody>
       </table>`;
