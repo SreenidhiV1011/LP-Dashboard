@@ -790,11 +790,20 @@ async function processNewRow(rowObj, sector, fundId){
   const groupKey = normGroup(rowObj["Investing Group"]);
   const emails = ownEmails(rowObj);
 
-  // Exact auto-tag tier: exact group match or exact name match
+  // Exact auto-tag tier: exact name match always, exact group match only across funds.
+  //
+  // A shared Investing Group means "same LP" when the match is in a *different* fund
+  // (one entity re-upping). Within the fund being uploaded it means the opposite:
+  // two distinct entities co-investing side by side under one umbrella — e.g. two
+  // members of a family office, each with their own commitment. Auto-merging those
+  // silently collapses four people into two records, so leave them separate and let
+  // the near-miss tier flag them for review if the names/emails look alike.
   const exactMatch = INVESTORS.find(inv => {
-    const invGroup = normGroup(inv.row["Investing Group"]);
     const invName = normName(inv.row["Investor"]);
-    return (groupKey && invGroup && invGroup === groupKey) || (nameKey && invName === nameKey);
+    if(nameKey && invName === nameKey) return true;
+    const invGroup = normGroup(inv.row["Investing Group"]);
+    if(!groupKey || !invGroup || invGroup !== groupKey) return false;
+    return !(inv.funds || []).includes(fundId);
   });
   if(exactMatch){
     await mergeIntoExisting(exactMatch, rowObj, sector, fundId);
@@ -839,6 +848,10 @@ async function mergeIntoExisting(existing, rowObj, sector, fundId){
   }
   MASTER_COLS.forEach(c => { if(!existing.row[c] && rowObj[c]) updates[`row.${c}`] = rowObj[c]; });
   await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
+  // Reflect the new fund locally right away. The onSnapshot listener will catch up
+  // with server truth, but the same-fund group check in processNewRow reads this on
+  // the very next row of the upload loop and can't wait for the round trip.
+  existing.funds = [...new Set([...(existing.funds || []), fundId])];
 }
 
 /* ============ Bell: possible-match review ============ */
