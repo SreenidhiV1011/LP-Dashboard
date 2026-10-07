@@ -63,6 +63,33 @@
   .btn-confirm:hover{ background:var(--accent-dark); }
   .btn-dismiss{ background:#fff; color:var(--ink-soft); border:1px solid var(--line); }
   .bell-empty{ padding:22px 14px; text-align:center; font-size:12.5px; color:var(--ink-faintest); }
+  .bell-item.clickable{ cursor:pointer; }
+  .bell-item.clickable:hover{ background:var(--page); }
+  .bell-item .review-cue{ font-size:11px; color:var(--accent); font-weight:500; }
+
+  /* Compare-and-decide modal for possible repeat matches */
+  .cmp-backdrop{ display:none; position:fixed; inset:0; background:rgba(18,26,40,0.42); z-index:60; align-items:center; justify-content:center; padding:24px; }
+  .cmp-backdrop.open{ display:flex; }
+  .cmp{ background:#fff; border-radius:13px; box-shadow:0 18px 48px rgba(16,24,40,0.24); width:760px; max-width:100%; max-height:88vh; display:flex; flex-direction:column; overflow:hidden; }
+  .cmp-head{ padding:16px 20px 13px; border-bottom:1px solid var(--line); }
+  .cmp-head h2{ margin:0 0 3px; font-size:16px; font-weight:600; }
+  .cmp-head .why{ font-size:12px; color:var(--ink-faint); }
+  .cmp-head .close{ float:right; cursor:pointer; color:var(--ink-faintest); font-size:19px; line-height:1; }
+  .cmp-body{ overflow-y:auto; padding:4px 0; }
+  .cmp-row{ display:grid; grid-template-columns:150px 1fr 1fr; gap:12px; padding:7px 20px; font-size:12.5px; border-bottom:1px solid var(--line-soft); }
+  .cmp-row.hdr{ position:sticky; top:0; background:#fff; font-weight:600; font-size:11px; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-faintest); border-bottom:1px solid var(--line); padding-top:11px; padding-bottom:9px; }
+  .cmp-row .f{ color:var(--ink-faint); }
+  .cmp-row .v{ color:var(--ink); word-break:break-word; }
+  .cmp-row .v.blank{ color:var(--ink-faintest); }
+  .cmp-row.same{ background:#F2FAF5; }
+  .cmp-row.diff .v{ font-weight:500; }
+  .cmp-tag{ font-size:10px; font-weight:600; padding:1px 6px; border-radius:4px; margin-left:6px; vertical-align:1px; }
+  .cmp-tag.same{ background:#DDF3E6; color:#1C7A4A; }
+  .cmp-tag.diff{ background:#FBE7E7; color:#B3322F; }
+  .cmp-foot{ padding:13px 20px; border-top:1px solid var(--line); display:flex; gap:9px; align-items:center; }
+  .cmp-foot .spacer{ flex:1; }
+  .cmp-foot button{ font-family:inherit; font-size:12.5px; font-weight:500; padding:7px 14px; border-radius:7px; cursor:pointer; }
+  .cmp-foot .note{ font-size:11.5px; color:var(--ink-faintest); }
 
   .nav-label{ font-size:10.5px; font-weight:600; letter-spacing:0.07em; color:var(--ink-faintest); margin:16px 8px 6px; text-transform:uppercase; }
   .sidebar{ padding:18px 14px; border-right:1px solid var(--line); }
@@ -289,6 +316,24 @@
       </div>
       <span class="email" id="footStatus">Connecting&hellip;</span>
       <div class="avatar" id="avatarInit">S</div>
+    </div>
+  </div>
+
+  <div class="cmp-backdrop" id="cmpBackdrop" onclick="if(event.target===this) closeCompare()">
+    <div class="cmp">
+      <div class="cmp-head">
+        <span class="close" onclick="closeCompare()" title="Close">&times;</span>
+        <h2>Are these the same LP?</h2>
+        <div class="why" id="cmpWhy"></div>
+      </div>
+      <div class="cmp-body" id="cmpBody"></div>
+      <div class="cmp-foot">
+        <span class="note" id="cmpNote"></span>
+        <span class="spacer"></span>
+        <button class="btn-dismiss" onclick="closeCompare()">Cancel</button>
+        <button class="btn-dismiss" id="cmpSeparate">Keep separate</button>
+        <button class="btn-confirm" id="cmpMerge">Confirm repeat &mdash; merge</button>
+      </div>
     </div>
   </div>
 
@@ -869,15 +914,75 @@ function renderBell(){
   badge.textContent = POSSIBLE_MATCHES.length;
   emptyEl.style.display = "none";
   itemsEl.innerHTML = POSSIBLE_MATCHES.map(m => `
-    <div class="bell-item">
+    <div class="bell-item clickable" onclick="openCompare('${m.id}')" title="Compare these two side by side">
       <div class="names">${escapeHtml(m.newInvestorName)} (${escapeHtml(m.newFund)}) &harr; ${escapeHtml(m.existingInvestorName)}</div>
       <div class="reason">${escapeHtml(m.reason)}</div>
-      <div class="bell-actions">
-        <button class="btn-confirm" onclick="confirmMatch('${m.id}')">Confirm repeat</button>
-        <button class="btn-dismiss" onclick="dismissMatch('${m.id}')">Dismiss</button>
-      </div>
+      <div class="review-cue">Compare &amp; decide &rarr;</div>
     </div>`).join("");
 }
+
+/* --- Compare-and-decide modal ---
+   The bell alone asks you to judge "same LP?" from two names and a one-line reason,
+   which is rarely enough. This lays both records out field by field so the call can
+   be made on the evidence: what actually matches, and what doesn't. */
+const CMP_FIELDS = ["Investor","Investing Group","Domicile","City","Amount INR","Category",
+  "Principal 1","E-mail ID of Principal 1","Key Investor SPOC","Key Investor SPOC E-mail",
+  "Telephone No of Principal 1","Comments"];
+
+window.openCompare = function(matchId){
+  const m = POSSIBLE_MATCHES.find(x => x.id === matchId);
+  if(!m) return;
+  const newer = INVESTORS.find(i => i.id === m.newInvestorId);
+  const existing = INVESTORS.find(i => i.id === m.existingInvestorId);
+  if(!newer || !existing){
+    alert("One of these records is no longer in the ledger — it may have been merged or deleted already.");
+    dismissMatch(matchId);
+    return;
+  }
+
+  document.getElementById("cmpWhy").textContent = `Flagged because: ${m.reason}`;
+
+  const val = (inv, f) => {
+    const raw = inv.row[f];
+    if(raw === undefined || raw === null || String(raw).trim() === "") return "";
+    return f === "Amount INR" ? crStr(Number(raw) || 0, 2) : String(raw).trim();
+  };
+  const fundsOf = inv => (inv.funds || []).join(", ") || "—";
+
+  let sameCount = 0, diffCount = 0;
+  const rows = CMP_FIELDS.map(f => {
+    const a = val(newer, f), b = val(existing, f);
+    if(!a && !b) return "";
+    let cls = "", tag = "";
+    if(a && b){
+      // Amounts differing is expected and says nothing about identity, so it is
+      // shown but left unscored.
+      if(a === b){ cls = "same"; if(f !== "Amount INR"){ sameCount++; tag = `<span class="cmp-tag same">match</span>`; } }
+      else { cls = "diff"; if(f !== "Amount INR"){ diffCount++; tag = `<span class="cmp-tag diff">differs</span>`; } }
+    }
+    const cell = v => v
+      ? `<div class="v">${escapeHtml(v.length > 220 ? v.slice(0,220) + "…" : v)}</div>`
+      : `<div class="v blank">—</div>`;
+    return `<div class="cmp-row ${cls}"><div class="f">${escapeHtml(colLabel(f))}${tag}</div>${cell(a)}${cell(b)}</div>`;
+  }).join("");
+
+  document.getElementById("cmpBody").innerHTML =
+    `<div class="cmp-row hdr"><div>Field</div><div>Incoming &mdash; ${escapeHtml(m.newFund || "new upload")}</div><div>Already in ledger &mdash; ${escapeHtml(fundsOf(existing))}</div></div>` + rows;
+
+  document.getElementById("cmpNote").textContent =
+    `${sameCount} field${sameCount === 1 ? "" : "s"} match, ${diffCount} differ`;
+
+  const merged = (Number(newer.row["Amount INR"]) || 0) + (Number(existing.row["Amount INR"]) || 0);
+  const mergeBtn = document.getElementById("cmpMerge");
+  mergeBtn.textContent = `Confirm repeat — merge into ${crStr(merged, 2)}`;
+  mergeBtn.onclick = async () => { closeCompare(); await confirmMatch(matchId); };
+  document.getElementById("cmpSeparate").onclick = async () => { closeCompare(); await dismissMatch(matchId); };
+
+  document.getElementById("bellPanel").classList.remove("open");
+  document.getElementById("cmpBackdrop").classList.add("open");
+};
+window.closeCompare = () => document.getElementById("cmpBackdrop").classList.remove("open");
+document.addEventListener("keydown", e => { if(e.key === "Escape") closeCompare(); });
 window.toggleBell = () => document.getElementById("bellPanel").classList.toggle("open");
 document.getElementById("bellBtn").onclick = () => document.getElementById("bellPanel").classList.toggle("open");
 window.confirmMatch = async function(matchId){
