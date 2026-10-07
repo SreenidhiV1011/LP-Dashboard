@@ -530,7 +530,18 @@ const MASTER_COLS = SEED.MASTER_COLS;
 const CORE_COLS = ["Investor","Investing Group","Domicile","City","Amount INR","Comments","Links"];
 const COL_LABELS = { "Comments": "Description" };
 function colLabel(c){ return COL_LABELS[c] || c; }
-const OPTIONAL_COLS = MASTER_COLS.filter(c => !CORE_COLS.includes(c));
+/* Columns found in uploaded sheets that aren't part of the reference schema. Derived
+   from the investor docs themselves on every snapshot, so a column added to a fund
+   sheet survives a reload without anything needing to be hardcoded here. */
+let EXTRA_COLS = [];
+function allDataCols(){ return [...MASTER_COLS, ...EXTRA_COLS]; }
+function optionalCols(){ return allDataCols().filter(c => !CORE_COLS.includes(c)); }
+function recomputeExtraCols(){
+  const known = new Set(MASTER_COLS);
+  const found = new Set();
+  INVESTORS.forEach(inv => Object.keys(inv.row || {}).forEach(k => { if(!known.has(k)) found.add(k); }));
+  EXTRA_COLS = [...found].sort();
+}
 let visibleOptionalCols = [];
 try{ visibleOptionalCols = JSON.parse(localStorage.getItem("lp_ledger_visible_cols") || "[]"); }catch(e){ visibleOptionalCols = []; }
 
@@ -668,6 +679,7 @@ async function ensureSeeded(){
 function subscribeToInvestors(){
   onSnapshot(collection(db, INVESTORS_COL), (snap) => {
     INVESTORS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    recomputeExtraCols();
     FUNDS = computeFunds();
     refreshSectorOptions();
     renderSidebar();
@@ -731,7 +743,7 @@ function setStatusDot(saving){ document.getElementById("statusDot").classList.to
 function saveVisibleCols(){ localStorage.setItem("lp_ledger_visible_cols", JSON.stringify(visibleOptionalCols)); }
 function renderColumnChips(){
   const wrap = document.getElementById("colChips");
-  wrap.innerHTML = OPTIONAL_COLS.map(c => {
+  wrap.innerHTML = optionalCols().map(c => {
     const on = visibleOptionalCols.includes(c);
     return `<div class="col-chip ${on?"on":""}" onclick="toggleOptionalCol('${c.replace(/'/g,"\\'")}')">${escapeHtml(colLabel(c))}</div>`;
   }).join("") + `<div class="col-chip ${visibleOptionalCols.includes("__sector__")?"on":""}" onclick="toggleOptionalCol('__sector__')">Sector (auto)</div>`;
@@ -761,16 +773,48 @@ const COL_GUESS = {
   "E-mail ID of Principal 1": /e.?mail/i, "Comments": /comment/i,
   "Links": /^links?$|linkedin|\burl\b|website/i,
 };
+/* Header text and schema names rarely differ by more than casing, padding or a line
+   break inside the cell, so compare them in a normalised form. */
+function normHeader(h){ return String(h||"").replace(/\s+/g," ").trim().toLowerCase(); }
+
+/* Build sheet-column -> ledger-field mapping in three passes, strongest signal first:
+     1. the header names a schema field outright ("Domicile", "Key Investor SPOC")
+     2. no name match, but a COL_GUESS pattern recognises it ("Investing Entity" -> Investor)
+     3. neither — it is a column this ledger has never seen, so keep it under its own
+        name rather than discarding it
+   Pass 1 matters most: it is what stops the 21 schema fields that have no COL_GUESS
+   entry from being silently dropped on every upload. */
 function guessColumns(headerRow){
   const map = {};
+  const taken = new Set();
+  const known = new Map(allDataCols().map(c => [normHeader(c), c]));
+
   headerRow.forEach((h,i) => {
     if(!h) return;
+    const hit = known.get(normHeader(h));
+    if(hit && map[hit] === undefined){ map[hit] = i; taken.add(i); }
+  });
+
+  headerRow.forEach((h,i) => {
+    if(!h || taken.has(i)) return;
     const s = String(h);
     for(const key of Object.keys(COL_GUESS)){
-      if(map[key] === undefined && COL_GUESS[key].test(s)) map[key] = i;
+      if(map[key] === undefined && COL_GUESS[key].test(s)){ map[key] = i; taken.add(i); break; }
     }
   });
-  return map;
+
+  const added = [];
+  headerRow.forEach((h,i) => {
+    if(!h || taken.has(i)) return;
+    const name = String(h).replace(/\s+/g," ").trim();
+    // A bare "#" row-number column carries no information worth keeping.
+    if(!name || name === "#" || map[name] !== undefined) return;
+    map[name] = i;
+    taken.add(i);
+    added.push(name);
+  });
+
+  return { map, added };
 }
 async function handleUpload(e){
   const file = e.target.files[0];
@@ -786,9 +830,9 @@ async function handleUpload(e){
     for(const sheetName of wb.SheetNames){
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: "" });
       if(rows.length < 2) continue;
-      const map = guessColumns(rows[0]);
+      const { map, added } = guessColumns(rows[0]);
       if(map["Investor"] === undefined) continue;
-      sheets.push({ sheetName, rows, map });
+      sheets.push({ sheetName, rows, map, added });
     }
     if(sheets.length === 0){
       setStatusDot(false);
@@ -801,6 +845,7 @@ async function handleUpload(e){
       const answer = prompt(
         `Fund name for ${sheets.length === 1 ? "this upload" : `sheet "${s.sheetName}"`} (${s.rows.length - 1} rows).\n` +
         `Use an existing fund name to merge into it, or type a new one. Cancel to skip.` +
+        (s.added.length ? `\n\nNew column${s.added.length === 1 ? "" : "s"} that will be added to the ledger: ${s.added.join(", ")}` : "") +
         (FUNDS.length ? `\n\nExisting funds: ${FUNDS.map(f => f.label).join(", ")}` : ""),
         suggested);
       if(answer === null){ s.skip = true; continue; }
@@ -808,8 +853,10 @@ async function handleUpload(e){
     }
 
     let total = 0, flagged = 0;
-    for(const { rows, map, fundId, skip } of sheets){
+    const newCols = new Set();
+    for(const { rows, map, fundId, skip, added } of sheets){
       if(skip) continue;
+      added.forEach(c => newCols.add(c));
       for(let r = 1; r < rows.length; r++){
         const dataRow = rows[r];
         if(!dataRow || !dataRow[map["Investor"]]) continue;
@@ -823,7 +870,9 @@ async function handleUpload(e){
     }
     setStatusDot(false);
     alert(total > 0
-      ? `Upload complete \u2014 ${total} row(s) processed.` + (flagged > 0 ? ` ${flagged} possible match(es) need your review \u2014 check the bell icon.` : "")
+      ? `Upload complete \u2014 ${total} row(s) processed.`
+        + (newCols.size ? `\n\n${newCols.size} new column${newCols.size === 1 ? "" : "s"} added \u2014 turn ${newCols.size === 1 ? "it" : "them"} on via the Columns button: ${[...newCols].join(", ")}` : "")
+        + (flagged > 0 ? `\n\n${flagged} possible match(es) need your review \u2014 check the bell icon.` : "")
       : "Nothing imported \u2014 all sheets were skipped.");
   };
   reader.readAsBinaryString(file);
@@ -891,7 +940,9 @@ async function mergeIntoExisting(existing, rowObj, sector, fundId){
   } else {
     updates[`fundAmounts.${fundId}`] = (existing.fundAmounts?.[fundId]||0) + addAmt;
   }
-  MASTER_COLS.forEach(c => { if(!existing.row[c] && rowObj[c]) updates[`row.${c}`] = rowObj[c]; });
+  // Union of both records' fields, so a column only the incoming sheet has still lands.
+  new Set([...allDataCols(), ...Object.keys(rowObj)])
+    .forEach(c => { if(!existing.row[c] && rowObj[c]) updates[`row.${c}`] = rowObj[c]; });
   await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
   // Reflect the new fund locally right away. The onSnapshot listener will catch up
   // with server truth, but the same-fund group check in processNewRow reads this on
@@ -1000,7 +1051,8 @@ window.confirmMatch = async function(matchId){
     } else if(nf){
       updates[`fundAmounts.${nf}`] = (existing.fundAmounts?.[nf]||0) + addAmt;
     }
-    MASTER_COLS.forEach(c => { if(!existing.row[c] && newer.row[c]) updates[`row.${c}`] = newer.row[c]; });
+    new Set([...allDataCols(), ...Object.keys(newer.row || {})])
+      .forEach(c => { if(!existing.row[c] && newer.row[c]) updates[`row.${c}`] = newer.row[c]; });
     await updateDoc(doc(db, INVESTORS_COL, existing.id), updates);
     await deleteDoc(doc(db, INVESTORS_COL, newer.id));
   }
@@ -1327,7 +1379,7 @@ function renderAll(){
     if(statusF === "repeat" && !r.repeat) return false;
     if(statusF === "single" && r.repeat) return false;
     if(search){
-      const hay = MASTER_COLS.map(c => r.row[c]).join(" ").toLowerCase();
+      const hay = allDataCols().map(c => r.row[c]).join(" ").toLowerCase();
       if(!hay.includes(search)) return false;
     }
     return true;
@@ -1447,7 +1499,7 @@ function formatCell(col, r, rowIdx, editing){
       : `No per-fund split recorded — this is the all-fund total across ${escapeHtml((r.funds||[]).join(", "))}`;
     return `<span title="${note}">${escapeHtml(display)}</span>`;
   }
-  if(editing && MASTER_COLS.includes(col)){
+  if(editing && allDataCols().includes(col)){
     return `<span contenteditable="true" data-idx="${rowIdx}" data-col="${escapeHtml(col)}" onblur="commitEdit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${escapeHtml(display)}</span>`;
   }
   return escapeHtml(display);
@@ -1464,7 +1516,7 @@ function renderTable(rows){
   body.innerHTML = rows.map((r, rowIdx) => {
     const cells = cols.map((col,i) => {
       const stickyClass = i === 0 ? "sticky" : "";
-      const editableClass = editing && MASTER_COLS.includes(col) && !(col === "Amount INR" && amountLocked(r)) ? "editable" : "";
+      const editableClass = editing && allDataCols().includes(col) && !(col === "Amount INR" && amountLocked(r)) ? "editable" : "";
       const descClass = col === "Comments" ? "desc" : "";
       const linksClass = col === "Links" ? "links-cell" : "";
       if(col === "Investor"){
