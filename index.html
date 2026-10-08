@@ -117,6 +117,12 @@
   .headline-actions{ display:flex; gap:8px; }
   .subtitle{ margin:0 0 18px; font-size:12.5px; color:var(--ink-faint); }
 
+  .currency-toggle{ display:flex; align-items:center; gap:6px; background:var(--page); border:1px solid var(--line); border-radius:var(--radius); padding:3px; }
+  .currency-toggle button{ font-family:inherit; font-size:12px; font-weight:500; padding:5px 11px; border-radius:7px; border:none; background:transparent; color:var(--ink-faint); cursor:pointer; }
+  .currency-toggle button.active{ background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(20,30,50,0.12); }
+  .currency-toggle .rate-edit{ font-size:11px; color:var(--ink-faintest); cursor:pointer; padding-right:8px; border-left:1px solid var(--line); padding-left:8px; }
+  .currency-toggle .rate-edit:hover{ color:var(--accent-dark); }
+
   .btn{ font-family:inherit; font-size:12.5px; font-weight:500; padding:8px 14px; border-radius:var(--radius); border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
   .btn:hover{ border-color:var(--ink-faintest); }
   .btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
@@ -202,6 +208,10 @@
   #mapView{ display:none; }
   #mapView.active{ display:block; }
   #investorMap{ height:540px; border:1px solid var(--line); border-radius:var(--radius); background:var(--card); }
+  .map-filterbar{ display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; background:var(--card); border:1px solid var(--line); border-radius:11px; padding:10px 14px; }
+  .map-filterbar label{ display:flex; flex-direction:column; gap:3px; font-size:11px; color:var(--ink-faint); font-weight:500; }
+  .map-filterbar select{ font-family:inherit; font-size:12.5px; color:var(--ink); padding:6px 9px; border-radius:7px; border:1px solid var(--line); background:var(--page); cursor:pointer; min-width:120px; }
+  .map-filterbar select:disabled{ opacity:0.5; cursor:not-allowed; }
   .map-legend{ display:flex; gap:16px; align-items:center; margin-bottom:10px; font-size:12px; color:var(--ink-soft); flex-wrap:wrap; }
   .map-legend .sw{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:middle; }
 
@@ -363,10 +373,17 @@
     <div class="main">
       <div class="headline">
         <div><h1 id="pageTitle">All investors</h1></div>
-        <div class="headline-actions" id="tableActions">
-          <button class="btn" id="editBtn" onclick="toggleEditMode()">Edit mode</button>
-          <button class="btn" onclick="exportCsv()">Export CSV</button>
-          <button class="btn primary" onclick="document.getElementById('fileInput').click()">Upload Excel</button>
+        <div style="display:flex;align-items:flex-start;gap:14px;">
+          <div class="currency-toggle" title="Switch the currency shown everywhere — stats, dashboard, map, groups, table, CSV">
+            <button class="active" id="curInr" onclick="setCurrency('INR')">&#8377; INR</button>
+            <button id="curUsd" onclick="setCurrency('USD')">$ USD</button>
+            <span class="rate-edit" id="rateEdit" onclick="editRate()" style="display:none;" title="Click to change the conversion rate"></span>
+          </div>
+          <div class="headline-actions" id="tableActions">
+            <button class="btn" id="editBtn" onclick="toggleEditMode()">Edit mode</button>
+            <button class="btn" onclick="exportCsv()">Export CSV</button>
+            <button class="btn primary" onclick="document.getElementById('fileInput').click()">Upload Excel</button>
+          </div>
         </div>
       </div>
       <p class="subtitle" id="pageSubtitle">Merged across all funds</p>
@@ -478,6 +495,20 @@
       </div>
 
       <div id="mapView">
+        <div class="map-filterbar">
+          <label>Fund<select id="mapFundFilter" onchange="setMapFund(this.value)"><option value="__all__">All funds</option></select></label>
+          <label>Vintage<select id="mapVintageFilter" disabled title="No vintage/year field is captured in the source sheets yet"><option>Not tracked</option></select></label>
+          <label>LP Type<select id="mapCategoryFilter" onchange="setMapFilter('category', this.value)"><option value="">All types</option></select></label>
+          <label>Geography<select id="mapGeoFilter" onchange="setMapFilter('geo', this.value)"><option value="">All geographies</option></select></label>
+          <label>Commitment<select id="mapCommitFilter" onchange="setMapFilter('commit', this.value)">
+            <option value="">Any</option>
+            <option value="lt1">&lt; ₹1 Cr</option>
+            <option value="1to5">₹1–5 Cr</option>
+            <option value="5to20">₹5–20 Cr</option>
+            <option value="gt20">₹20+ Cr</option>
+          </select></label>
+          <label>Repeat LPs<select id="mapRepeatFilter" onchange="setMapFilter('repeat', this.value)"><option value="">All</option><option value="repeat">Repeat only</option></select></label>
+        </div>
         <div class="map-legend">
           <span><span class="sw" style="background:#2F6FED"></span>City known &mdash; plotted at city</span>
           <span><span class="sw" style="background:#B8842B"></span>City unknown &mdash; plotted at country centroid</span>
@@ -498,6 +529,7 @@
 
       <div id="groupsView">
         <p class="subtitle" style="margin-top:0;">Click a group to see every linked entity underneath it.</p>
+        <div class="search" style="margin-bottom:14px;max-width:360px;"><span>&#128269;</span><input placeholder="Search investing groups&hellip;" id="groupsSearchBox" oninput="onGroupsSearch(this.value)" /></div>
         <div id="groupsList"></div>
       </div>
     </div>
@@ -535,7 +567,10 @@ const SEED = {"MASTER_COLS": ["Investor", "Investing Group", "Domicile", "City",
 const MASTER_COLS = SEED.MASTER_COLS;
 const CORE_COLS = ["Investor","Investing Group","Domicile","City","Amount INR","Comments","Links"];
 const COL_LABELS = { "Comments": "Description" };
-function colLabel(c){ return COL_LABELS[c] || c; }
+function colLabel(c){
+  if(c === "Amount INR") return currency === "USD" ? "Amount (USD)" : "Amount INR";
+  return COL_LABELS[c] || c;
+}
 /* Columns found in uploaded sheets that aren't part of the reference schema. Derived
    from the investor docs themselves on every snapshot, so a column added to a fund
    sheet survives a reload without anything needing to be hardcoded here. */
@@ -602,6 +637,15 @@ let unit = "L";
 let sortKey = "Amount INR", sortDir = "desc";
 const L_PER_CR = 100;
 let mapInstance = null, mapMarkersLayer = null, openGroupKey = null;
+/* Display currency only — every amount stays stored in INR in Firestore. Switching
+   this just changes how crStr()/fmtAmt() render a number, everywhere they're used
+   (stat strip, dashboard, map, groups view, CSV export, table cells). */
+let currency = localStorage.getItem("lp_ledger_currency") === "USD" ? "USD" : "INR";
+let usdRate = Number(localStorage.getItem("lp_ledger_usd_rate")) || 88;
+let groupsSearch = "";
+/* Map filter bar state — scoped only to the Location view; "fund" piggybacks on the
+   same currentFund used by the sidebar/table so the two stay in sync either direction. */
+let mapCategoryFilter = "", mapGeoFilter = "", mapCommitFilter = "", mapRepeatFilter = "";
 
 const SECTOR_RULES = [
   [/family office/i, "Family office"], [/private equity|venture capital|investment principal|investment strategist|chief investment/i, "PE / VC"],
@@ -691,6 +735,7 @@ function subscribeToInvestors(){
     renderSidebar();
     renderColumnChips();
     renderHeader();
+    renderCurrencyToggle();
     renderAll();
     setStatusDot(false);
   }, (err) => { console.error(err); document.getElementById("footStatus").textContent = "Sync error"; });
@@ -1113,6 +1158,7 @@ function markActiveNav(){
 function selectFund(fundId){
   currentFund = fundId;
   setViewMode("table");
+  document.getElementById("statusFilter").value = "";
   const f = FUNDS.find(x => x.id === fundId);
   document.getElementById("pageTitle").textContent = f ? f.label : "All investors";
   document.getElementById("pageSubtitle").textContent = fundId === "__all__" ? "Merged across all funds" : `${f ? f.label : ""}`;
@@ -1185,7 +1231,7 @@ function renderGroupSummary(){
   });
   panel.style.display = "block";
   document.getElementById("gsName").textContent = groupFilter;
-  document.getElementById("gsTotal").textContent = "\u20b9" + (total/1e7).toLocaleString(undefined,{maximumFractionDigits:2}) + " Cr";
+  document.getElementById("gsTotal").textContent = crStr(total, 2);
   const fundKeys = Object.keys(byFund);
   const allFunds = new Set();
   rows.forEach(r => (r.funds||[]).forEach(f => allFunds.add(f)));
@@ -1196,7 +1242,7 @@ function renderGroupSummary(){
   const card = (label, amt, muted) => `
     <div style="flex:1;min-width:150px;background:var(--page);border:1px solid ${muted ? "#E6C98A" : "var(--line-soft)"};border-radius:9px;padding:10px 14px;">
       <div style="font-size:11.5px;color:${muted ? "#8A6410" : "var(--ink-faint)"};margin-bottom:4px;">${escapeHtml(label)}</div>
-      <div class="num" style="font-size:15px;font-weight:500;">\u20b9${(amt/1e7).toLocaleString(undefined,{maximumFractionDigits:2})} Cr</div>
+      <div class="num" style="font-size:15px;font-weight:500;">${crStr(amt, 2)}</div>
       <div style="height:4px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden;"><div style="height:100%;background:${muted ? "#E0A93B" : "var(--accent)"};width:${(amt/maxF*100).toFixed(0)}%"></div></div>
     </div>`;
   document.getElementById("gsFundSplit").innerHTML = allFunds.size > 1
@@ -1225,7 +1271,48 @@ function countryOf(row){
   const hit = domicileCoords(d);
   return hit ? cleanLabel(hit[2]) : d;
 }
-function crStr(n, dp){ return "₹" + (n/1e7).toLocaleString(undefined,{maximumFractionDigits: dp===undefined?1:dp}) + " Cr"; }
+/* n is always the raw INR value as stored in Firestore; crStr/fmtAmt are the only two
+   places that convert it for display, so every view — stat strip, dashboard, map,
+   groups, table, CSV — stays in sync the moment the toggle flips. */
+function crStr(n, dp){
+  const places = dp === undefined ? 1 : dp;
+  if(currency === "USD") return "$" + (n/usdRate/1e6).toLocaleString(undefined,{maximumFractionDigits: places}) + "M";
+  return "₹" + (n/1e7).toLocaleString(undefined,{maximumFractionDigits: places}) + " Cr";
+}
+/* For raw table/export cells that show the full number rather than a Cr/L-rounded one. */
+function fmtAmt(n){
+  if(!n) return "";
+  return currency === "USD" ? Math.round(n/usdRate).toLocaleString("en-US") : n.toLocaleString("en-IN");
+}
+window.setCurrency = function(cur){
+  currency = cur;
+  localStorage.setItem("lp_ledger_currency", currency);
+  renderCurrencyToggle();
+  renderAll();
+  if(viewMode === "map" && mapInstance) renderMap();
+  if(viewMode === "groups") renderGroups();
+};
+window.editRate = function(){
+  const answer = prompt("₹ per $1 — used to convert every amount when USD is selected:", String(usdRate));
+  if(answer === null) return;
+  const n = Number(answer);
+  if(!n || n <= 0){ alert("Enter a positive number."); return; }
+  usdRate = n;
+  localStorage.setItem("lp_ledger_usd_rate", String(usdRate));
+  renderCurrencyToggle();
+  if(currency === "USD"){
+    renderAll();
+    if(viewMode === "map" && mapInstance) renderMap();
+    if(viewMode === "groups") renderGroups();
+  }
+};
+function renderCurrencyToggle(){
+  document.getElementById("curInr").classList.toggle("active", currency === "INR");
+  document.getElementById("curUsd").classList.toggle("active", currency === "USD");
+  const rate = document.getElementById("rateEdit");
+  rate.style.display = currency === "USD" ? "" : "none";
+  rate.textContent = `@ ₹${usdRate.toLocaleString(undefined,{maximumFractionDigits:2})}/$`;
+}
 /* Single source of truth for how an LP's commitment divides across its funds.
    fundAmounts is only written when a merge happens, so repeats merged before that
    field existed have a known total and an unknown split. The honest treatment is to
@@ -1453,8 +1540,8 @@ function renderAll(){
 function renderStats(rows){
   document.getElementById("statTotal").textContent = rows.length;
   document.getElementById("statRepeat").textContent = rows.filter(r => r.repeat).length;
-  const totalCr = rows.reduce((s,r) => s + amountFor(r), 0) / 1e7;
-  document.getElementById("statAmount").textContent = "\u20b9" + totalCr.toLocaleString(undefined,{maximumFractionDigits:1}) + " Cr";
+  const totalAmt = rows.reduce((s,r) => s + amountFor(r), 0);
+  document.getElementById("statAmount").textContent = crStr(totalAmt, 1);
   document.getElementById("statFunds").textContent = currentFund === "__all__" ? FUNDS.length : 1;
   document.getElementById("statCountries").textContent = new Set(rows.map(r => countryOf(r.row)).filter(Boolean)).size;
 }
@@ -1533,7 +1620,7 @@ function formatCell(col, r, rowIdx, editing){
   }
   let v = r.row[col];
   let display;
-  if(col === "Amount INR"){ const n = amountFor(r); display = n ? n.toLocaleString("en-IN") : ""; }
+  if(col === "Amount INR"){ const n = amountFor(r); display = n ? fmtAmt(n) : ""; }
   else { display = (v === null || v === undefined) ? "" : String(v); }
   if(col === "Amount INR" && amountLocked(r)){
     const note = hasFundSplit(r)
@@ -1620,7 +1707,7 @@ function exportCsv(){
     const vals = cols.map(col => {
       if(col === "Sector (auto)") return r.sector;
       if(col === "Status") return r.repeat ? "Repeat \u00b7 " + (r.funds||[]).join(", ") : "Single fund";
-      if(col === "Amount INR") return amountFor(r);
+      if(col === "Amount INR"){ const n = amountFor(r); return currency === "USD" ? Math.round(n/usdRate) : n; }
       return r.row[col] ?? "";
     });
     lines.push(vals.map(v => `"${String(v).replace(/"/g,'""')}"`).join(","));
@@ -1671,14 +1758,67 @@ function resolveCoords(row){
   if(domHit) return { coords: domHit, known: false, label: domHit[2] };
   return null;
 }
+const COMMIT_BUCKETS = {
+  "lt1": { label: "< ₹1 Cr", test: n => n < 1e7 },
+  "1to5": { label: "₹1–5 Cr", test: n => n >= 1e7 && n < 5e7 },
+  "5to20": { label: "₹5–20 Cr", test: n => n >= 5e7 && n < 20e7 },
+  "gt20": { label: "₹20+ Cr", test: n => n >= 20e7 },
+};
+function mapRows(){
+  return currentRows().filter(r => {
+    if(mapCategoryFilter && (r.row["Category"]||"").trim() !== mapCategoryFilter) return false;
+    if(mapGeoFilter && (countryOf(r.row)||"") !== mapGeoFilter) return false;
+    if(mapCommitFilter && !COMMIT_BUCKETS[mapCommitFilter].test(amountFor(r))) return false;
+    if(mapRepeatFilter === "repeat" && !r.repeat) return false;
+    return true;
+  });
+}
+function renderMapFilterOptions(){
+  const fundSel = document.getElementById("mapFundFilter");
+  if(fundSel && fundSel.options.length !== FUNDS.length + 1){
+    fundSel.innerHTML = '<option value="__all__">All funds</option>' + FUNDS.map(f => `<option value="${escapeHtml(f.id)}">${escapeHtml(f.label)}</option>`).join("");
+  }
+  if(fundSel) fundSel.value = currentFund;
+  const catSel = document.getElementById("mapCategoryFilter");
+  if(catSel){
+    const cats = [...new Set(INVESTORS.map(i => (i.row["Category"]||"").trim()).filter(Boolean))].sort();
+    const wanted = cats.length + 1;
+    if(catSel.options.length !== wanted || catSel.dataset.n !== String(cats.length)){
+      catSel.innerHTML = '<option value="">All types</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+      catSel.dataset.n = String(cats.length);
+    }
+    catSel.value = mapCategoryFilter;
+  }
+  const geoSel = document.getElementById("mapGeoFilter");
+  if(geoSel){
+    const geos = [...new Set(INVESTORS.map(i => countryOf(i.row)).filter(Boolean))].sort();
+    if(geoSel.dataset.n !== String(geos.length)){
+      geoSel.innerHTML = '<option value="">All geographies</option>' + geos.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("");
+      geoSel.dataset.n = String(geos.length);
+    }
+    geoSel.value = mapGeoFilter;
+  }
+}
+window.setMapFund = function(fundId){
+  currentFund = fundId;
+  renderMap();
+};
+window.setMapFilter = function(which, val){
+  if(which === "category") mapCategoryFilter = val;
+  else if(which === "geo") mapGeoFilter = val;
+  else if(which === "commit") mapCommitFilter = val;
+  else if(which === "repeat") mapRepeatFilter = val;
+  renderMap();
+};
 function renderMap(){
   if(!mapInstance){
     mapInstance = L.map('investorMap', { scrollWheelZoom: true }).setView([20, 30], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 18 }).addTo(mapInstance);
     mapMarkersLayer = L.layerGroup().addTo(mapInstance);
   }
+  renderMapFilterOptions();
   mapMarkersLayer.clearLayers();
-  const rows = currentRows();
+  const rows = mapRows();
   const amounts = rows.map(amountFor).filter(n => n > 0);
   const maxAmt = Math.max(1, ...amounts);
   const grouped = {};
@@ -1696,7 +1836,7 @@ function renderMap(){
     const radiusPx = 5 + Math.sqrt(amt / maxAmt) * 16;
     const marker = L.circleMarker([lat, lng], { radius: radiusPx, color: loc.known ? "#2F6FED" : "#B8842B", fillColor: loc.known ? "#2F6FED" : "#B8842B", fillOpacity: 0.55, weight: 1.5 });
     const pinCity = cityOf(r.row);
-    marker.bindPopup(`<b>${escapeHtml(r.row["Investor"]||"")}</b>` + (r.row["Investing Group"] ? `Group: ${escapeHtml(r.row["Investing Group"])}<br>` : "") + `\u20b9${(amt/1e7).toLocaleString(undefined,{maximumFractionDigits:2})} Cr<br>` + `${escapeHtml(r.row["Category"]||"")} \u00b7 ${escapeHtml(loc.label)}${!loc.known ? " (country-level)" : ""}`
+    marker.bindPopup(`<b>${escapeHtml(r.row["Investor"]||"")}</b>` + (r.row["Investing Group"] ? `Group: ${escapeHtml(r.row["Investing Group"])}<br>` : "") + `${crStr(amt,2)}<br>` + `${escapeHtml(r.row["Category"]||"")} \u00b7 ${escapeHtml(loc.label)}${!loc.known ? " (country-level)" : ""}`
       + (pinCity ? `<br><a href="javascript:void(0)" onclick="selectCity('${pinCity.replace(/'/g,"\\'")}')">See all ${escapeHtml(pinCity)} investors</a>` : ""));
     marker.addTo(mapMarkersLayer);
   });
@@ -1709,7 +1849,7 @@ function renderMap(){
 let selectedCity = null;
 
 function renderCityList(){
-  const rows = currentRows();
+  const rows = mapRows();
   const byCity = {};
   let blanks = 0;
   rows.forEach(r => {
@@ -1747,7 +1887,7 @@ function renderCityDetail(){
   const panel = document.getElementById("cityDetail");
   if(!selectedCity){ panel.style.display = "none"; panel.innerHTML = ""; return; }
   const noCity = selectedCity === "__none__";
-  const rows = currentRows()
+  const rows = mapRows()
     .filter(r => noCity ? !cityOf(r.row) : cityOf(r.row) === selectedCity)
     .sort((a,b) => amountFor(b) - amountFor(a));
   const total = rows.reduce((s,r) => s + amountFor(r), 0);
@@ -1761,7 +1901,7 @@ function renderCityDetail(){
     ${noCity ? `<p class="subtitle" style="margin:-4px 0 10px;">These investors have no City value on their record — they're plotted at their country centroid on the map.</p>` : ""}
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Investor</th><th>Investing group</th><th>Domicile</th><th>Category</th><th>Relationship</th><th style="text-align:right;">Amount INR</th><th>Funds</th><th>Description</th></tr></thead>
+        <thead><tr><th>Investor</th><th>Investing group</th><th>Domicile</th><th>Category</th><th>Relationship</th><th style="text-align:right;">${escapeHtml(colLabel("Amount INR"))}</th><th>Funds</th><th>Description</th></tr></thead>
         <tbody>${rows.map(r => `
           <tr class="${r.repeat ? "repeat" : ""}">
             <td class="sticky"><span class="iname">${escapeHtml(r.row["Investor"]||"")}</span></td>
@@ -1769,7 +1909,7 @@ function renderCityDetail(){
             <td>${escapeHtml(countryOf(r.row)||"")}</td>
             <td>${escapeHtml(r.row["Category"]||"")}</td>
             <td>${escapeHtml(r.row["Relationship"]||"")}</td>
-            <td class="num" style="text-align:right;">${amountFor(r).toLocaleString("en-IN")}</td>
+            <td class="num" style="text-align:right;">${fmtAmt(amountFor(r))}</td>
             <td>${escapeHtml((r.funds||[]).join(", "))}</td>
             <td class="desc">${escapeHtml(r.row["Comments"]||"")}</td>
           </tr>`).join("")}</tbody>
@@ -1787,24 +1927,34 @@ function renderGroups(){
     groups[key].count += 1;
     groups[key].rows.push(r);
   });
-  const list = Object.values(groups).sort((a,b) => b.total - a.total);
+  let list = Object.values(groups).sort((a,b) => b.total - a.total);
+  const q = groupsSearch.trim().toLowerCase();
+  if(q){
+    list = list.filter(g => g.key.toLowerCase().includes(q)
+      || g.rows.some(r => (r.row["Investor"]||"").toLowerCase().includes(q)));
+  }
   const maxTotal = Math.max(1, ...list.map(g => g.total));
   const container = document.getElementById("groupsList");
+  if(!list.length){
+    container.innerHTML = `<p class="subtitle" style="padding:20px 0;">No investing groups match "${escapeHtml(groupsSearch)}".</p>`;
+    return;
+  }
   container.innerHTML = list.map(g => {
     const pct = (g.total / maxTotal * 100).toFixed(1);
     const isOpen = openGroupKey === g.key;
-    const rowsHtml = g.rows.map(r => `<tr><td>${escapeHtml(r.row["Investor"]||"")}</td><td>${escapeHtml(r.row["City"]||r.row["Domicile"]||"")}</td><td>${escapeHtml(r.row["Category"]||"")}</td><td class="num">\u20b9${amountFor(r).toLocaleString("en-IN")}</td></tr>`).join("");
+    const rowsHtml = g.rows.map(r => `<tr><td>${escapeHtml(r.row["Investor"]||"")}</td><td>${escapeHtml(r.row["City"]||r.row["Domicile"]||"")}</td><td>${escapeHtml(r.row["Category"]||"")}</td><td class="num">${fmtAmt(amountFor(r))}</td></tr>`).join("");
     return `
       <div class="group-row" onclick="toggleGroup('${g.key.replace(/'/g,"\\'")}')">
         <div><div class="gname">${escapeHtml(g.key)}</div><div class="gmeta">${g.count} entit${g.count === 1 ? "y" : "ies"}</div><div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div></div>
-        <div class="gamt"><div class="v">\u20b9${(g.total/1e7).toLocaleString(undefined,{maximumFractionDigits:2})} Cr</div><div class="n">${(g.total/g.count/1e7).toLocaleString(undefined,{maximumFractionDigits:2})} Cr avg</div></div>
+        <div class="gamt"><div class="v">${crStr(g.total, 2)}</div><div class="n">${crStr(g.total/g.count, 2)} avg</div></div>
       </div>
       <div class="group-detail ${isOpen ? "open" : ""}" id="detail-${cssId(g.key)}">
-        <table><thead><tr><th>Entity</th><th>City / Domicile</th><th>Category</th><th>Amount INR</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+        <table><thead><tr><th>Entity</th><th>City / Domicile</th><th>Category</th><th>${escapeHtml(colLabel("Amount INR"))}</th></tr></thead><tbody>${rowsHtml}</tbody></table>
       </div>`;
   }).join("");
 }
 window.toggleGroup = function(key){ openGroupKey = openGroupKey === key ? null : key; renderGroups(); };
+window.onGroupsSearch = function(val){ groupsSearch = val; renderGroups(); };
 
 maxRange.disabled = true; maxInput.disabled = true;
 updateSliderFill();
