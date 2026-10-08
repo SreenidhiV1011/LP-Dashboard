@@ -251,6 +251,12 @@
   .mini-table tr:last-child td{ border-bottom:none; }
   .mini-table td.rank{ color:var(--ink-faintest); }
   .mini-table td.r, .mini-table th.r{ text-align:right; }
+  /* Per-fund split cells stack one line per fund, so they opt out of the single-line clamp above. */
+  .mini-table td.split{ white-space:normal; }
+  .split-line{ display:flex; justify-content:space-between; gap:8px; align-items:baseline; line-height:1.5; }
+  .split-line .fund{ color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .split-line .amt{ color:var(--ink); flex:none; font-size:11.5px; }
+  .split-line.pending .fund, .split-line.pending .amt{ color:#8A6410; }
   .insight-strip{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
   .insight{ border:1px solid var(--line); border-radius:var(--radius); background:var(--card); padding:12px 16px; }
   .insight .v{ font-size:16px; font-weight:600; color:var(--accent-dark); }
@@ -1171,22 +1177,32 @@ function renderGroupSummary(){
   const rows = currentRows().filter(r => (r.row["Investing Group"]||"").trim() === groupFilter);
   const total = rows.reduce((s,r) => s + amountFor(r), 0);
   const byFund = {};
+  let unattributed = 0;
   rows.forEach(r => {
-    if(r.fundAmounts){ Object.entries(r.fundAmounts).forEach(([f,a]) => byFund[f] = (byFund[f]||0) + Number(a||0)); }
-    else { (r.funds||[]).forEach(f => byFund[f] = (byFund[f]||0) + (Number(r.row["Amount INR"])||0)); }
+    const s = splitFor(r);
+    Object.entries(s.byFund).forEach(([f,a]) => byFund[f] = (byFund[f]||0) + a);
+    unattributed += s.unattributed;
   });
   panel.style.display = "block";
   document.getElementById("gsName").textContent = groupFilter;
   document.getElementById("gsTotal").textContent = "\u20b9" + (total/1e7).toLocaleString(undefined,{maximumFractionDigits:2}) + " Cr";
   const fundKeys = Object.keys(byFund);
-  document.getElementById("gsSub").textContent = `${rows.length} entit${rows.length===1?"y":"ies"}${fundKeys.length>1 ? " \u00b7 invested across " + fundKeys.length + " funds" : ""}`;
-  const maxF = Math.max(1, ...Object.values(byFund));
-  document.getElementById("gsFundSplit").innerHTML = fundKeys.length > 1 ? fundKeys.map(f => `
-    <div style="flex:1;min-width:150px;background:var(--page);border:1px solid var(--line-soft);border-radius:9px;padding:10px 14px;">
-      <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:4px;">${escapeHtml(f)}</div>
-      <div class="num" style="font-size:15px;font-weight:500;">\u20b9${(byFund[f]/1e7).toLocaleString(undefined,{maximumFractionDigits:2})} Cr</div>
-      <div style="height:4px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden;"><div style="height:100%;background:var(--accent);width:${(byFund[f]/maxF*100).toFixed(0)}%"></div></div>
-    </div>`).join("") : "";
+  const allFunds = new Set();
+  rows.forEach(r => (r.funds||[]).forEach(f => allFunds.add(f)));
+  document.getElementById("gsSub").textContent =
+    `${rows.length} entit${rows.length===1?"y":"ies"}${allFunds.size>1 ? " \u00b7 invested across " + allFunds.size + " funds" : ""}`
+    + (unattributed ? ` \u00b7 ${crStr(unattributed,2)} not yet attributed to a fund` : "");
+  const maxF = Math.max(1, ...Object.values(byFund), unattributed);
+  const card = (label, amt, muted) => `
+    <div style="flex:1;min-width:150px;background:var(--page);border:1px solid ${muted ? "#E6C98A" : "var(--line-soft)"};border-radius:9px;padding:10px 14px;">
+      <div style="font-size:11.5px;color:${muted ? "#8A6410" : "var(--ink-faint)"};margin-bottom:4px;">${escapeHtml(label)}</div>
+      <div class="num" style="font-size:15px;font-weight:500;">\u20b9${(amt/1e7).toLocaleString(undefined,{maximumFractionDigits:2})} Cr</div>
+      <div style="height:4px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden;"><div style="height:100%;background:${muted ? "#E0A93B" : "var(--accent)"};width:${(amt/maxF*100).toFixed(0)}%"></div></div>
+    </div>`;
+  document.getElementById("gsFundSplit").innerHTML = allFunds.size > 1
+    ? fundKeys.map(f => card(f, byFund[f], false)).join("")
+      + (unattributed ? card("Split not recorded", unattributed, true) : "")
+    : "";
 }
 /* ============ Dashboard ============
    City/Domicile are entered inconsistently (DXB and Dubai, US and USA both occur).
@@ -1210,12 +1226,26 @@ function countryOf(row){
   return hit ? cleanLabel(hit[2]) : d;
 }
 function crStr(n, dp){ return "₹" + (n/1e7).toLocaleString(undefined,{maximumFractionDigits: dp===undefined?1:dp}) + " Cr"; }
-/* A repeat LP with no recorded split can't be attributed to one fund, so it contributes 0
-   rather than being counted in full against every fund it appears in. */
-function amountInFund(r, fundId){
-  if(r.fundAmounts && Object.prototype.hasOwnProperty.call(r.fundAmounts, fundId)) return Number(r.fundAmounts[fundId])||0;
-  return (r.funds||[]).length === 1 ? (Number(r.row["Amount INR"])||0) : 0;
+/* Single source of truth for how an LP's commitment divides across its funds.
+   fundAmounts is only written when a merge happens, so repeats merged before that
+   field existed have a known total and an unknown split. The honest treatment is to
+   leave that money unattributed: charging the full cumulative total to every fund
+   inflates each one (a 2-fund LP would appear to have invested twice over), while
+   silently dropping it understates the firm's total. Callers get both numbers and
+   decide how to present the gap. */
+function splitFor(r){
+  const total = Number(r.row["Amount INR"]) || 0;
+  const funds = r.funds || [];
+  if(r.fundAmounts && Object.keys(r.fundAmounts).length){
+    const byFund = {};
+    let attributed = 0;
+    Object.entries(r.fundAmounts).forEach(([f,a]) => { const n = Number(a) || 0; byFund[f] = n; attributed += n; });
+    return { byFund, unattributed: Math.max(0, total - attributed) };
+  }
+  if(funds.length === 1) return { byFund: { [funds[0]]: total }, unattributed: 0 };
+  return { byFund: {}, unattributed: total };
 }
+function amountInFund(r, fundId){ return splitFor(r).byFund[fundId] || 0; }
 function tally(rows, keyFn){
   const o = {};
   rows.forEach(r => { const k = keyFn(r); if(k) o[k] = (o[k]||0) + 1; });
@@ -1322,20 +1352,32 @@ function renderDashboard(){
       <div class="r"><span class="sw" style="background:${DASH_PALETTE[i % DASH_PALETTE.length]}"></span>
         <span class="k">${escapeHtml(t)}</span><span class="v num">${Math.round(n/typeTotal*100)}%</span></div>`).join("") + `</div>`;
 
-  /* --- Repeat LP detail --- */
+  /* --- Repeat LP detail, broken down per fund --- */
   document.getElementById("dashRepeatHint").textContent = rep ? `${rep} repeat LP${rep === 1 ? "" : "s"}` : "";
+  const repUnattributed = repeatRows.reduce((s,r) => s + splitFor(r).unattributed, 0);
   document.getElementById("dashRepeatList").innerHTML = rep === 0
     ? `<p style="margin:0;font-size:12px;color:var(--ink-faintest);">No LP appears in more than one fund in this view.</p>`
     : `<table class="mini-table">
-        <colgroup><col><col style="width:150px"><col style="width:96px"></colgroup>
-        <thead><tr><th>LP name</th><th>Funds</th><th class="r">Total</th></tr></thead>
-        <tbody>${[...repeatRows].sort((a,b) => (b.funds||[]).length - (a.funds||[]).length).map(r => `
+        <colgroup><col><col style="width:210px"><col style="width:96px"></colgroup>
+        <thead><tr><th>LP name</th><th>Split by fund</th><th class="r">Total</th></tr></thead>
+        <tbody>${[...repeatRows].sort((a,b) => (b.funds||[]).length - (a.funds||[]).length).map(r => {
+          const s = splitFor(r);
+          const parts = Object.keys(s.byFund).sort((a,b) => s.byFund[b] - s.byFund[a])
+            .map(f => `<div class="split-line"><span class="fund">${escapeHtml(f)}</span><span class="num amt">${crStr(s.byFund[f], 2)}</span></div>`);
+          if(s.unattributed){
+            parts.push(`<div class="split-line pending" title="These funds were merged before the per-fund split was recorded. Re-uploading the fund sheet fills it in.">`
+              + `<span class="fund">${escapeHtml((r.funds||[]).join(", "))}</span><span class="num amt">${crStr(s.unattributed, 2)} unsplit</span></div>`);
+          }
+          return `
           <tr>
             <td title="${escapeHtml(r.row["Investor"]||"")}">${escapeHtml(r.row["Investor"]||"")}</td>
-            <td title="${escapeHtml((r.funds||[]).join(", "))}">${escapeHtml((r.funds||[]).join(", "))}</td>
+            <td class="split">${parts.join("")}</td>
             <td class="r num">${crStr(Number(r.row["Amount INR"])||0, 2)}</td>
-          </tr>`).join("")}</tbody>
-      </table>`;
+          </tr>`; }).join("")}</tbody>
+      </table>`
+      + (repUnattributed
+          ? `<p style="margin:8px 0 0;font-size:11px;color:#8A6410;">${crStr(repUnattributed,2)} across these LPs predates per-fund tracking and can't be attributed to a single fund yet — re-uploading the relevant fund sheet records the split.</p>`
+          : "");
 
   /* --- Key insights --- */
   const amtsDesc = rows.map(amountFor).sort((a,b) => b-a);
